@@ -38,7 +38,7 @@ branches:
     - /^(3\.[1-9]|[4-9]\.\d)\.x$/
 
 install:
-  - travis/prepare-phpbb.sh $EXTNAME $PHPBB_BRANCH
+  - travis/prepare-phpbb.sh $PHPBB_BRANCH
 
 script:
   - sh -c "if [ '$SNIFF' != '0' ]; then travis/ext-sniff.sh $DB $TRAVIS_PHP_VERSION $EXTSNIFF; fi"
