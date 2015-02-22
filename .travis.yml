@@ -38,9 +38,6 @@ branches:
     - /^(3\.[1-9]|[4-9]\.\d)\.x$/
 
 install:
-  - cd core
-  - composer install --dev --no-interaction --prefer-source
-  - cd ..
   - travis/prepare-phpbb.sh $EXTNAME $PHPBB_BRANCH
 
 script:
