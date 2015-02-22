@@ -18,7 +18,7 @@ require_once 'vb_conversion_constants.php';
 // Permission convertion
 require_once 'vbPermission.class.php';
 // Data store to keep data between requests
-require_once 'DataStore.class.php';
+require_once 'ConversionDataStore.php';
 // Functions specific to forum permissions
 require_once 'functions_vb37_permissions.php';
 
@@ -161,7 +161,7 @@ function vb_convert_forums() {
 	vb_build_left_right_id($forums, $hierarchy, $left_id);
 
 	// We save the hierarchy for later use (forum permissions)
-	$datastore = new DataStore();
+	$datastore = new ConversionDataStore();
 	$datastore->clearData('forums');
 	$datastore->setData('forums', $forums);
 
@@ -1334,7 +1334,7 @@ function vb_set_moved_id($pollid)
  */
 function vb_clean_datastore()
 {
-	$datastore = new DataStore();
+	$datastore = new ConversionDataStore();
 	$datastore->purge();
 }
 
@@ -1759,7 +1759,7 @@ function vb_convert_pm_folders()
 	$db->sql_multi_insert(PRIVMSGS_FOLDER_TABLE, $folders);
 	vb_conversion_log('vb_convert_pm_folder(): ' . count($folders) . ' PM folder(s) found');
 
-	$datastore = new DataStore();
+	$datastore = new ConversionDataStore();
 	$datastore->clearData('pmfolders');
 	$datastore->setData('pmfolders', $rows);
 }
@@ -1790,7 +1790,7 @@ function vb_folder_id($folder_id)
 		$vb_folder_id = PRIVMSGS_INBOX;
 
 	} elseif ($folder_id > 0) {
-		$datastore = new DataStore();
+		$datastore = new ConversionDataStore();
 		$folders = $datastore->getData('pmfolders');
 
 		if (isset($folders[$convert->row['poster_id']]['folders'][$folder_id])) {
@@ -2473,7 +2473,7 @@ function vb_import_icons()
 	}
 	$db->sql_multi_insert(ICONS_TABLE, $inserts);
 
-	$ds = new DataStore();
+	$ds = new ConversionDataStore();
 	$ds->setData('icon_conversion', $icon_conversion);
 	unset ($ds);
 }
@@ -2489,7 +2489,7 @@ function vb_icon_id($source_id)
 	static $icon_conversion = array();
 
 	if (empty($icon_conversion)) {
-		$ds = new DataStore();
+		$ds = new ConversionDataStore();
 		$icon_conversion = $ds->getData('icon_conversion');
 		unset($ds);
 	}
