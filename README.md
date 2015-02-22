@@ -1,6 +1,8 @@
 # vb3-to-phpBB3.1
 vBulletin 3 converter for phpBB 3.1
 
+[![Build Status](https://travis-ci.org/gouarfig/vb3-to-phpBB3.1.svg)](https://travis-ci.org/gouarfig/vb3-to-phpBB3.1)
+
 Please refer to the phpBB converters documentation first: [Convert How-to](https://www.phpbb.com/community/viewtopic.php?f=486&t=2278536).
 
 This is a new converter written from scratch that I needed to convert my board under vBulletin 3.7.2 to phpBB 3.1.2. Now that the work is finished, I'm happy to give it to the phpBB community.

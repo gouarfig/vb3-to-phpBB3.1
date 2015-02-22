@@ -39,6 +39,8 @@ branches:
 
 install:
   - travis/prepare-phpbb.sh $PHPBB_BRANCH
+  - cd ../phpBB3
+  - travis/setup-phpbb.sh $DB $TRAVIS_PHP_VERSION
 
 script:
   - sh -c "if [ '$SNIFF' != '0' ]; then travis/ext-sniff.sh $DB $TRAVIS_PHP_VERSION $EXTSNIFF; fi"
