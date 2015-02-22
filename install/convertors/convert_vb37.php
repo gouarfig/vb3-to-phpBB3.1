@@ -31,7 +31,7 @@ $dbms = $phpbb_config_php_file->convert_30_dbms_to_31($dbms);
 */
 $convertor_data = array(
 	'forum_name'	=> 'vBulletin v3.7.x',
-	'version'		=> '1.0.0-RC5',
+	'version'		=> '1.0.0-RC6',
 	'phpbb_version'	=> '3.1.2',
 	'author'		=> '<a href="https://www.phpbb.com/community/memberlist.php?mode=viewprofile&u=1438256">FredQ</a>',
 	'dbms'			=> $dbms,
@@ -280,6 +280,9 @@ $config_schema = array(
 		'smtp_port'				=> 'smtp_port',
 		'smtp_username'			=> 'smtp_user',
 		'smtp_password'			=> 'smtp_pass',
+		// phpBBGallery
+		'phpbb_gallery_items_per_page'		=> 'album_pictures_perpage',
+		'phpbb_gallery_thumbnail_height'	=> 'album_thumbsize',
 	)
 );
 
@@ -456,7 +459,6 @@ if (!$get_info)
 		'smilies_path'			=> 'images/smilies/',
 		'upload_path'			=> get_config_value('attachpath') . '/',
 		'thumbnails'			=> '',
-		//'ranks_path'			=> false,
 		'avatar_loc'			=> get_config_value('usefileavatar'),
 		'attach_loc'			=> get_config_value('attachfile'),
 		'version'				=> get_config_value('templateversion'),
@@ -464,6 +466,8 @@ if (!$get_info)
 		'signature_pics_path'	=> get_config_value('sigpicurl'),
 		'profile_pics_enabled'	=> get_config_value('profilepicenabled'),
 		'profile_pics_path'		=> get_config_value('profilepicurl'),
+
+		'album_dataloc'			=> get_config_value('album_dataloc'),
 
 		// Don't change this without knowing what you're doing: you're probably going to brake the converter
 		'default_language_code' => 'en',
@@ -553,9 +557,276 @@ if (!$get_info)
 			'SIGPIC' => 'sigpic',
 		),
 
+		// Moderator log conversion
 		'log_operations' => $log_operations,
-
 		'log_definition' => $log_definition,
+
+		// Conversion of the picture albums to be compatible with the phpBBGallery extension (how cool is that?)
+		'gallery_extension' => array(
+				'gallery_albums' => array(
+					'COLUMNS'		=> array(
+						'album_id'					=> array('UINT', null, 'auto_increment'),
+						'parent_id'					=> array('UINT', 0),
+						'left_id'					=> array('UINT', 1),
+						'right_id'					=> array('UINT', 2),
+						'album_parents'				=> array('MTEXT_UNI', ''),
+						'album_type'				=> array('UINT:3', 1),
+						'album_status'				=> array('UINT:1', 1),
+						'album_contest'				=> array('UINT', 0),
+						'album_name'				=> array('VCHAR:255', ''),
+						'album_desc'				=> array('MTEXT_UNI', ''),
+						'album_desc_options'		=> array('UINT:3', 7),
+						'album_desc_uid'			=> array('VCHAR:8', ''),
+						'album_desc_bitfield'		=> array('VCHAR:255', ''),
+						'album_user_id'				=> array('UINT', 0),
+						'album_images'				=> array('UINT', 0),
+						'album_images_real'			=> array('UINT', 0),
+						'album_last_image_id'		=> array('UINT', 0),
+						'album_image'				=> array('VCHAR', ''),
+						'album_last_image_time'		=> array('INT:11', 0),
+						'album_last_image_name'		=> array('VCHAR', ''),
+						'album_last_username'		=> array('VCHAR', ''),
+						'album_last_user_colour'	=> array('VCHAR:6', ''),
+						'album_last_user_id'		=> array('UINT', 0),
+						'album_watermark'			=> array('UINT:1', 1),
+						'album_sort_key'			=> array('VCHAR:8', ''),
+						'album_sort_dir'			=> array('VCHAR:8', ''),
+						'display_in_rrc'			=> array('UINT:1', 1),
+						'display_on_index'			=> array('UINT:1', 1),
+						'display_subalbum_list'		=> array('UINT:1', 1),
+						'album_feed'				=> array('BOOL', 1),
+						'album_auth_access'			=> array('TINT:1', 0),
+					),
+					'PRIMARY_KEY'	=> 'album_id',
+				),
+				'gallery_albums_track' => array(
+					'COLUMNS'		=> array(
+						'user_id'				=> array('UINT', 0),
+						'album_id'				=> array('UINT', 0),
+						'mark_time'				=> array('TIMESTAMP', 0),
+					),
+					'PRIMARY_KEY'	=> array('user_id', 'album_id'),
+				),
+				'gallery_comments' => array(
+					'COLUMNS'		=> array(
+						'comment_id'			=> array('UINT', null, 'auto_increment'),
+						'comment_image_id'		=> array('UINT', 0),
+						'comment_user_id'		=> array('UINT', 0),
+						'comment_username'		=> array('VCHAR', ''),
+						'comment_user_colour'	=> array('VCHAR:6', ''),
+						'comment_user_ip'		=> array('VCHAR:40', ''),
+						'comment_signature'		=> array('BOOL', 0),
+						'comment_time'			=> array('UINT:11', 0),
+						'comment'				=> array('MTEXT_UNI', ''),
+						'comment_uid'			=> array('VCHAR:8', ''),
+						'comment_bitfield'		=> array('VCHAR:255', ''),
+						'comment_edit_time'		=> array('UINT:11', 0),
+						'comment_edit_count'	=> array('USINT', 0),
+						'comment_edit_user_id'	=> array('UINT', 0),
+					),
+					'PRIMARY_KEY'	=> 'comment_id',
+					'KEYS'		=> array(
+						'id'			=> array('INDEX', 'comment_image_id'),
+						'uid'			=> array('INDEX', 'comment_user_id'),
+						'ip'			=> array('INDEX', 'comment_user_ip'),
+						'time'			=> array('INDEX', 'comment_time'),
+					),
+				),
+				'gallery_contests' => array(
+					'COLUMNS'		=> array(
+						'contest_id'			=> array('UINT', null, 'auto_increment'),
+						'contest_album_id'		=> array('UINT', 0),
+						'contest_start'			=> array('UINT:11', 0),
+						'contest_rating'		=> array('UINT:11', 0),
+						'contest_end'			=> array('UINT:11', 0),
+						'contest_marked'		=> array('TINT:1', 0),
+						'contest_first'			=> array('UINT', 0),
+						'contest_second'		=> array('UINT', 0),
+						'contest_third'			=> array('UINT', 0),
+					),
+					'PRIMARY_KEY'	=> 'contest_id',
+				),
+				'gallery_favorites' => array(
+					'COLUMNS'		=> array(
+						'favorite_id'			=> array('UINT', null, 'auto_increment'),
+						'user_id'				=> array('UINT', 0),
+						'image_id'				=> array('UINT', 0),
+					),
+					'PRIMARY_KEY'	=> 'favorite_id',
+					'KEYS'		=> array(
+						'uid'		=> array('INDEX', 'user_id'),
+						'id'		=> array('INDEX', 'image_id'),
+					),
+				),
+				'gallery_images' => array(
+					'COLUMNS'		=> array(
+						'image_id'				=> array('UINT', null, 'auto_increment'),
+						'image_filename'		=> array('VCHAR:255', ''),
+						'image_name'			=> array('VCHAR:255', ''),
+						'image_name_clean'		=> array('VCHAR:255', ''),
+						'image_desc'			=> array('MTEXT_UNI', ''),
+						'image_desc_uid'		=> array('VCHAR:8', ''),
+						'image_desc_bitfield'	=> array('VCHAR:255', ''),
+						'image_user_id'			=> array('UINT', 0),
+						'image_username'		=> array('VCHAR:255', ''),
+						'image_username_clean'	=> array('VCHAR:255', ''),
+						'image_user_colour'		=> array('VCHAR:6', ''),
+						'image_user_ip'			=> array('VCHAR:40', ''),
+						'image_time'			=> array('UINT:11', 0),
+						'image_album_id'		=> array('UINT', 0),
+						'image_view_count'		=> array('UINT:11', 0),
+						'image_status'			=> array('UINT:3', 0),
+						'image_contest'			=> array('UINT:1', 0),
+						'image_contest_end'		=> array('TIMESTAMP', 0),
+						'image_contest_rank'	=> array('UINT:3', 0),
+						'image_filemissing'		=> array('UINT:3', 0),
+						'image_rates'			=> array('UINT', 0),
+						'image_rate_points'		=> array('UINT', 0),
+						'image_rate_avg'		=> array('UINT', 0),
+						'image_comments'		=> array('UINT', 0),
+						'image_last_comment'	=> array('UINT', 0),
+						'image_allow_comments'	=> array('TINT:1', 1),
+						'image_favorited'		=> array('UINT', 0),
+						'image_reported'		=> array('UINT', 0),
+						'filesize_upload'		=> array('UINT:20', 0),
+						'filesize_medium'		=> array('UINT:20', 0),
+						'filesize_cache'		=> array('UINT:20', 0),
+					),
+					'PRIMARY_KEY'				=> 'image_id',
+					'KEYS'		=> array(
+						'aid'			=> array('INDEX', 'image_album_id'),
+						'uid'			=> array('INDEX', 'image_user_id'),
+						'time'			=> array('INDEX', 'image_time'),
+					),
+				),
+				'gallery_modscache' => array(
+					'COLUMNS'		=> array(
+						'album_id'				=> array('UINT', 0),
+						'user_id'				=> array('UINT', 0),
+						'username'				=> array('VCHAR', ''),
+						'group_id'				=> array('UINT', 0),
+						'group_name'			=> array('VCHAR', ''),
+						'display_on_index'		=> array('TINT:1', 1),
+					),
+					'KEYS'		=> array(
+						'doi'		=> array('INDEX', 'display_on_index'),
+						'aid'		=> array('INDEX', 'album_id'),
+					),
+				),
+				'gallery_permissions' => array(
+					'COLUMNS'		=> array(
+						'perm_id'			=> array('UINT', null, 'auto_increment'),
+						'perm_role_id'		=> array('UINT', 0),
+						'perm_album_id'		=> array('UINT', 0),
+						'perm_user_id'		=> array('UINT', 0),
+						'perm_group_id'		=> array('UINT', 0),
+						'perm_system'		=> array('INT:3', 0),
+					),
+					'PRIMARY_KEY'			=> 'perm_id',
+				),
+				'gallery_rates' => array(
+					'COLUMNS'		=> array(
+						'rate_image_id'		=> array('UINT', 0),
+						'rate_user_id'		=> array('UINT', 0),
+						'rate_user_ip'		=> array('VCHAR:40', ''),
+						'rate_point'		=> array('UINT:3', 0),
+					),
+					'PRIMARY_KEY'	=> array('rate_image_id', 'rate_user_id'),
+				),
+				'gallery_reports' => array(
+					'COLUMNS'		=> array(
+						'report_id'				=> array('UINT', null, 'auto_increment'),
+						'report_album_id'		=> array('UINT', 0),
+						'report_image_id'		=> array('UINT', 0),
+						'reporter_id'			=> array('UINT', 0),
+						'report_manager'		=> array('UINT', 0),
+						'report_note'			=> array('MTEXT_UNI', ''),
+						'report_time'			=> array('UINT:11', 0),
+						'report_status'			=> array('UINT:3', 0),
+					),
+					'PRIMARY_KEY'	=> 'report_id',
+				),
+				'gallery_roles' => array(
+					'COLUMNS'		=> array(
+						'role_id'			=> array('UINT', null, 'auto_increment'),
+						'a_list'			=> array('UINT:3', 0),
+						'i_view'			=> array('UINT:3', 0),
+						'i_watermark'		=> array('UINT:3', 0),
+						'i_upload'			=> array('UINT:3', 0),
+						'i_edit'			=> array('UINT:3', 0),
+						'i_delete'			=> array('UINT:3', 0),
+						'i_rate'			=> array('UINT:3', 0),
+						'i_approve'			=> array('UINT:3', 0),
+						'i_lock'			=> array('UINT:3', 0),
+						'i_report'			=> array('UINT:3', 0),
+						'i_count'			=> array('UINT', 0),
+						'i_unlimited'		=> array('UINT:3', 0),
+						'c_read'			=> array('UINT:3', 0),
+						'c_post'			=> array('UINT:3', 0),
+						'c_edit'			=> array('UINT:3', 0),
+						'c_delete'			=> array('UINT:3', 0),
+						'm_comments'		=> array('UINT:3', 0),
+						'm_delete'			=> array('UINT:3', 0),
+						'm_edit'			=> array('UINT:3', 0),
+						'm_move'			=> array('UINT:3', 0),
+						'm_report'			=> array('UINT:3', 0),
+						'm_status'			=> array('UINT:3', 0),
+						'a_count'			=> array('UINT', 0),
+						'a_unlimited'		=> array('UINT:3', 0),
+						'a_restrict'		=> array('UINT:3', 0),
+					),
+					'PRIMARY_KEY'		=> 'role_id',
+				),
+				'gallery_users' => array(
+					'COLUMNS'		=> array(
+						'user_id'			=> array('UINT', 0),
+						'watch_own'			=> array('UINT:3', 0),
+						'watch_favo'		=> array('UINT:3', 0),
+						'watch_com'			=> array('UINT:3', 0),
+						'user_images'		=> array('UINT', 0),
+						'personal_album_id'	=> array('UINT', 0),
+						'user_lastmark'		=> array('TIMESTAMP', 0),
+						'user_last_update'	=> array('TIMESTAMP', 0),
+						'user_permissions'	=> array('MTEXT_UNI', ''),
+						'user_permissions_changed'	=> array('TIMESTAMP', 0),
+						'user_allow_comments'		=> array('TINT:1', 1),
+						'subscribe_pegas'			=> array('TINT:1', 0),
+					),
+					'PRIMARY_KEY'		=> 'user_id',
+					'KEYS'		=> array(
+						'pega'			=> array('INDEX', array('personal_album_id')),
+					),
+				),
+				'gallery_watch' => array(
+					'COLUMNS'		=> array(
+						'watch_id'		=> array('UINT', null, 'auto_increment'),
+						'album_id'		=> array('UINT', 0),
+						'image_id'		=> array('UINT', 0),
+						'user_id'		=> array('UINT', 0),
+					),
+					'PRIMARY_KEY'		=> 'watch_id',
+					'KEYS'		=> array(
+						'uid'			=> array('INDEX', 'user_id'),
+						'id'			=> array('INDEX', 'image_id'),
+						'aid'			=> array('INDEX', 'album_id'),
+					),
+				),
+				'gallery_log' => array(
+					'COLUMNS'	=> array(
+						'log_id'	=> array('UINT', null, 'auto_increment'),
+						'log_time'	=> array('UINT:11', 0),
+						'log_type'	=> array('VCHAR:16', ''),
+						'log_action'	=> array('VCHAR:32', ''),
+						'log_user'		=> array('UINT', 0),
+						'log_ip'	=> array('VCHAR:40', ''),
+						'album'		=> array('UINT', 0),
+						'image'		=> array('UINT', 0),
+						'description'	=> array('VCHAR:256', ''),
+						'deleted'	=> array('UINT:1', 0),
+					),
+					'PRIMARY_KEY'	=> 'log_id',
+				),
+		),
 
 		// We empty some tables to have clean data available
 		'query_first'			=> array(
@@ -622,6 +893,10 @@ if (!$get_info)
 			vb_convert_moderator_permissions();
 		', '
 			vb_fix_permissions();
+		', '
+			vb_fix_albums();
+		', '
+			vb_fix_image_comments();
 		', '
 			vb_clean_datastore();
 		'),
@@ -956,10 +1231,10 @@ if (!$get_info)
 
 				array('user_options',			'user.options',						'vb_set_user_options'),
 
-				array('user_sig_bbcode_uid',		'user.joindate',								'make_uid'),
-				array('user_sig',					'usertextfield.signature',						'vb_prepare_message'),
-				array('user_sig_bbcode_bitfield',	'',												'get_bbcode_bitfield'),
-				array('',							'user.joindate AS post_time',					''),
+				array('user_sig_bbcode_uid',		'user.joindate',				'make_uid'),
+				array('user_sig',					'usertextfield.signature',		'vb_prepare_message'),
+				array('user_sig_bbcode_bitfield',	'',								'get_bbcode_bitfield'),
+				array('',							'user.joindate AS post_time',	''),
 				array('',						'user.userid AS user_id',			'vb_add_notification_options'),
 
 
@@ -1030,10 +1305,10 @@ if (!$get_info)
 
 				array('user_options',			'',									'set_user_options'),
 
-				array('user_sig_bbcode_uid',		'user.joindate',								'make_uid'),
-				array('user_sig',					'usertextfield.signature',						'vb_prepare_message'),
-				array('user_sig_bbcode_bitfield',	'',												'get_bbcode_bitfield'),
-				array('',							'user.joindate AS post_time',					''),
+				array('user_sig_bbcode_uid',		'user.joindate',				'make_uid'),
+				array('user_sig',					'usertextfield.signature',		'vb_prepare_message'),
+				array('user_sig_bbcode_bitfield',	'',								'get_bbcode_bitfield'),
+				array('',							'user.joindate AS post_time',	''),
 
 				'left_join'		=> array(
 					'user LEFT JOIN usertextfield ON user.userid=usertextfield.userid',
@@ -1065,6 +1340,116 @@ if (!$get_info)
 				array('log_data',				'',								'vb_log_data'),
 
 				'where'			=> 'type IN (' . implode(',', array_keys($log_operations)) . ')',
+			),
+
+			array(
+				'target'		=> $table_prefix . 'gallery_albums',
+				'primary'		=> 'album.albumid',
+				'execute_first'	=>
+								'vb_create_gallery_tables();'
+							. ' vb_create_gallery_file_system();',
+				'query_first'	=> array('target', $convert->truncate_statement . $table_prefix . 'gallery_albums'),
+
+				array('album_id',					'album.albumid',			''),
+				array('parent_id',					0,							''),
+				array('left_id',					0,							''),
+				array('right_id',					0,							''),
+				array('album_parents',				'',							''),
+				array('album_type',					1,							''),
+				array('album_status',				0,							''),
+				array('album_contest',				0,							''),
+				array('album_name',					'album.title',				'vb_set_default_encoding'),
+				array('album_desc_uid',				'album.createdate',			'make_uid'),
+				array('album_desc',					'album.description',		'vb_prepare_message'),
+				array('album_desc_options',			7,							''),
+				array('album_desc_bitfield',		'',							'get_bbcode_bitfield'),
+				array('album_user_id',				'album.userid',				'vb_user_id'),
+				array('album_images',				'album.visible',			''),
+				array('album_images_real',			'album.visible',			''),
+				array('album_last_image_id',		0,							''),
+				array('album_image',				'',							''),
+				array('album_last_image_time',		'album.lastpicturedate',	''),
+				array('album_last_image_name',		'',							''),
+				array('album_last_username',		'',							''),
+				array('album_last_user_colour',		'',							''),
+				array('album_last_user_id',			0,							''),
+				array('album_watermark',			1,							''),
+				array('album_sort_key',				'',							''),
+				array('album_sort_dir',				'',							''),
+				array('display_in_rrc',				1,							''),
+				array('display_on_index',			1,							''),
+				array('display_subalbum_list',		1,							''),
+				array('album_feed',					1,							''),
+				array('album_auth_access',			'album.state',				'vb_album_auth_access'),
+
+				'where'		=> 'album.userid IN (SELECT userid FROM user)',
+			),
+
+			array(
+				'target'		=> $table_prefix . 'gallery_images',
+				'primary'		=> 'albumpicture.pictureid',
+				'query_first'	=> array('target', $convert->truncate_statement . $table_prefix . 'gallery_images'),
+
+				array('image_id',				'albumpicture.pictureid',				''),
+				array('',						'picture.extension',					''),
+				array('image_filename',			'picture.filedata',						'vb_save_image'),
+				array('image_name',				'picture.caption as name',				'vb_image_name'),
+				array('image_name_clean',		'picture.caption as name_clean',		array('function1' => 'vb_image_name', 'function2' => 'utf8_clean_string')),
+				array('image_desc_uid',			'albumpicture.dateline as tmp',			'make_uid'),
+				array('image_desc',				'picture.caption',						'vb_prepare_message'),
+				array('image_desc_bitfield',	'',										'get_bbcode_bitfield'),
+				array('image_user_id',			'picture.userid',						'vb_user_id'),
+				array('image_username',			'picture.userid as username',			array('function1' => 'vb_user_id', 'function2' => 'vb_get_user_name')),
+				array('image_username_clean',	'picture.userid as username_clean',		array('function1' => 'vb_user_id', 'function2' => 'vb_get_user_name', 'function3' => 'utf8_clean_string')),
+				array('image_user_colour',		'',										''),
+				array('image_user_ip',			'',										''),
+				array('image_time',				'albumpicture.dateline',				''),
+				array('image_album_id',			'albumpicture.albumid',					''),
+				array('image_view_count',		0,							''),
+				array('image_status',			1,							''),
+				array('image_contest',			0,							''),
+				array('image_contest_end',		0,							''),
+				array('image_contest_rank',		0,							''),
+				array('image_filemissing',		0,							''),
+				array('image_rates',			0,							''),
+				array('image_rate_points',		0,							''),
+				array('image_rate_avg',			0,							''),
+				array('image_comments',			0,							''),
+				array('image_last_comment',		0,							''),
+				array('image_allow_comments',	1,							''),
+				array('image_favorited',		0,							''),
+				array('image_reported',			0,							''),
+				array('filesize_upload',		'picture.filesize',			''),
+				array('filesize_medium',		0,							''),
+				array('filesize_cache',			0,							''),
+
+				'left_join'		=> array(
+					'albumpicture LEFT JOIN picture ON albumpicture.pictureid=picture.pictureid',
+				),
+				'where'		=> 'picture.userid IN (SELECT userid FROM user)',
+			),
+
+			array(
+				'target'		=> $table_prefix . 'gallery_comments',
+				'primary'		=> 'picturecomment.commentid',
+				'query_first'	=> array('target', $convert->truncate_statement . $table_prefix . 'gallery_comments'),
+
+				array('comment_id',				'picturecomment.commentid',			''),
+				array('comment_image_id',		'picturecomment.pictureid',			''),
+				array('comment_user_id',		'picturecomment.postuserid',		'vb_user_id'),
+				array('comment_username',		'picturecomment.postusername',		'vb_set_default_encoding'),
+				array('comment_user_colour',	'',									''),
+				array('comment_user_ip',		'picturecomment.ipaddress',			'long2ip'),
+				array('comment_signature',		0,									''),
+				array('comment_time',			'picturecomment.dateline',			''),
+				array('comment_uid',			'picturecomment.dateline AS tmp',	'make_uid'),
+				array('comment',				'picturecomment.pagetext',			'vb_prepare_message'),
+				array('comment_bitfield',		'',									'get_bbcode_bitfield'),
+				array('comment_edit_time',		0,									''),
+				array('comment_edit_count',		0,									''),
+				array('comment_edit_user_id',	0,									''),
+
+				'where'			=> "picturecomment.state='visible' AND picturecomment.postuserid IN (SELECT userid FROM user) AND picturecomment.pictureid IN (SELECT pictureid FROM picture)",
 			),
 		),
 	);

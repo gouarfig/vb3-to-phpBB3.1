@@ -175,22 +175,23 @@ function vb_convert_forums() {
 }
 
 /**
- * Build a tree hierarchy of forums
+ * Build a tree hierarchy of forums (or gallery albums)
  *
  * @param array $forums
  * @param array $hierarchy
  * @param int $parent_id
+ * @param string $field_name
  */
-function vb_build_hierarchy($forums, &$hierarchy, $parent_id = 0) {
+function vb_build_hierarchy($forums, &$hierarchy, $parent_id = 0, $field_name = 'forum_id') {
 	//vb_conversion_log('vb_build_hierarchy(): Searching for children of parent id ' . $parent_id . '...');
 	foreach ($forums as $forum) {
 		if ($forum['parent_id'] == $parent_id) {
 			$new_element = Array(
-				'forum_id'	=> $forum['forum_id'],
+				$field_name	=> $forum[$field_name],
 				'children'	=> array()
 				);
 			$hierarchy[] = &$new_element;
-			vb_build_hierarchy($forums, $new_element['children'], $forum['forum_id']);
+			vb_build_hierarchy($forums, $new_element['children'], $forum[$field_name], $field_name);
 			// Build a new element
 			unset($new_element);
 		}
@@ -205,14 +206,14 @@ function vb_build_hierarchy($forums, &$hierarchy, $parent_id = 0) {
  * @param int $left_id
  * @return int
  */
-function vb_build_left_right_id(&$forums, &$children, &$left_id) {
+function vb_build_left_right_id(&$forums, &$children, &$left_id, $field_name = 'forum_id') {
 	$right_id = $left_id + 1;
 	if (is_array($children)) {
 		foreach ($children as &$leaf) {
 			$left_id++;
 			$leaf['left_id'] = $left_id;
 			if (!empty($leaf['children'])) {
-				$right_id = vb_build_left_right_id($forums, $leaf['children'], $left_id);
+				$right_id = vb_build_left_right_id($forums, $leaf['children'], $left_id, $field_name);
 			} else {
 				$right_id = $left_id;
 			}
@@ -220,8 +221,8 @@ function vb_build_left_right_id(&$forums, &$children, &$left_id) {
 			$leaf['right_id'] = $right_id;
 			$left_id = $right_id;
 			// Update forums
-			$forums[$leaf['forum_id']]['left_id'] = $leaf['left_id'];
-			$forums[$leaf['forum_id']]['right_id'] = $leaf['right_id'];
+			$forums[$leaf[$field_name]]['left_id'] = $leaf['left_id'];
+			$forums[$leaf[$field_name]]['right_id'] = $leaf['right_id'];
 		}
 	}
 	return $right_id;
@@ -3156,5 +3157,252 @@ function vb_convert_infractions()
 			$sql = "UPDATE " . USERS_TABLE . " SET user_warnings={$user_warning['count']}, user_last_warning={$user_warning['last']} WHERE user_id={$user_id}";
 			$db->sql_query($sql);
 		}
+	}
+}
+
+/**
+ * Creates all the tables needed by phpBBGallery extension
+ *
+ * @global type $phpbb_container
+ * @global type $convert
+ * @global type $table_prefix
+ */
+function vb_create_gallery_tables()
+{
+	global $phpbb_container, $convert, $phpbb_config_php_file;
+	$table_prefix = $phpbb_config_php_file->get('table_prefix');
+
+	$db_tools = $phpbb_container->get('dbal.tools');
+
+	foreach ($convert->convertor['gallery_extension'] as $table_name => $table_data) {
+		$table_name = $table_prefix . $table_name;
+		if (!$db_tools->sql_table_exists($table_name)) {
+			$db_tools->sql_create_table($table_name, $table_data);
+			vb_conversion_log("vb_create_gallery_tables(): '{$table_name}' created.");
+		} else {
+			vb_conversion_log("vb_create_gallery_tables(): WARNING table '{$table_name}' already exists.");
+		}
+	}
+}
+
+/**
+ * Creates all the folders needed for phpBBGallery
+ *
+ * @global type $phpbb_root_path
+ */
+function vb_create_gallery_file_system()
+{
+	global $phpbb_root_path;
+
+	$phpbbgallery_core_file = $phpbb_root_path . 'files/phpbbgallery/core';
+	$phpbbgallery_core_file_medium = $phpbb_root_path . 'files/phpbbgallery/core/medium';
+	$phpbbgallery_core_file_mini = $phpbb_root_path . 'files/phpbbgallery/core/mini';
+	$phpbbgallery_core_file_source = $phpbb_root_path . 'files/phpbbgallery/core/source';
+
+	if (is_writable($phpbb_root_path . 'files'))
+	{
+		@mkdir($phpbbgallery_core_file, 0755, true);
+		@mkdir($phpbbgallery_core_file_medium, 0755, true);
+		@mkdir($phpbbgallery_core_file_mini, 0755, true);
+		@mkdir($phpbbgallery_core_file_source, 0755, true);
+	}
+}
+
+
+function vb_album_auth_access($state)
+{
+	$auth_access = 0;
+	if ($state == 'private')
+	{
+		$auth_access = 3;
+	}
+	return $auth_access;
+}
+
+function vb_image_name($caption)
+{
+	if (strlen($caption) > 200)
+	{
+		$caption = 'Unnamed';
+	}
+	return vb_set_default_encoding($caption);
+}
+
+function vb_save_image($filedata)
+{
+	global $phpbb_root_path, $convert_row;
+
+	$phpbbgallery_core_file_source = $phpbb_root_path . 'files/phpbbgallery/core/source';
+	do
+	{
+		$filename = md5(unique_id()) . '.' . $convert_row['extension'];
+	}
+	while (@file_exists($phpbbgallery_core_file_source . '/' . $filename));
+
+	file_put_contents($phpbbgallery_core_file_source . '/' . $filename, $filedata);
+
+	return $filename;
+}
+
+function vb_fix_albums()
+{
+	global $db, $phpbb_config_php_file;
+
+	$table_prefix = $phpbb_config_php_file->get('table_prefix');
+
+	$album_id = 0;
+	$existing_albums = array();
+	$users = array();
+	$sql = "SELECT * FROM {$table_prefix}gallery_albums";
+	$result = $db->sql_query($sql);
+	while ($row = $db->sql_fetchrow($result)) {
+		$existing_albums[] = $row;
+		$users[$row['album_user_id']] = -1;
+		if ($row['album_id'] > $album_id)
+		{
+			$album_id = $row['album_id'];
+		}
+	}
+	$db->sql_freeresult($result);
+	vb_conversion_log("vb_fix_albums(): " . count($existing_albums) . " album(s) loaded.");
+
+	$album_last_image = array();
+	$sql = "SELECT image_album_id,max(image_time),image_name,image_user_id,image_username FROM {$table_prefix}gallery_images GROUP BY image_album_id";
+	$result = $db->sql_query($sql);
+	while ($row = $db->sql_fetchrow($result)) {
+		$album_last_image[$row['image_album_id']] = $row;
+	}
+	$db->sql_freeresult($result);
+
+	$user_root_albums = array();
+	// We need to create a root album for each user
+	foreach ($users as $user_id => $nothing)
+	{
+		$album_id++;
+		$user_root_albums[$user_id] = array(
+			'album_id' => $album_id,
+			'parent_id' => 0,
+			'left_id' => 0,
+			'right_id' => 0,
+			'album_parents' => '',
+			'album_type' => 1,
+			'album_status' => 0,
+			'album_contest' => 0,
+			'album_name' => vb_get_user_name($user_id),
+			'album_desc' => vb_get_user_name($user_id) . "'s album",
+			'album_desc_options' => 7,
+			'album_desc_uid' => '',
+			'album_desc_bitfield' => '',
+			'album_user_id' => $user_id,
+			'album_images' => 0,
+			'album_images_real' => 0,
+			'album_last_image_id' => 0,
+			'album_image' => '',
+			'album_last_image_time' => 0,
+			'album_last_image_name' => '',
+			'album_last_username' => '',
+			'album_last_user_colour' => '',
+			'album_last_user_id' => 0,
+			'album_watermark' => 1,
+			'album_sort_key' => '',
+			'album_sort_dir' => '',
+			'display_in_rrc' => 0,
+			'display_on_index' => 0,
+			'display_subalbum_list' => 1,
+			'album_feed' => 1,
+			'album_auth_access' => 0,
+		);
+	}
+
+	// Build the whole list of albums starting from the existing ones
+	$albums = array();
+	foreach ($existing_albums as $album)
+	{
+		// Now we know the parent, we just created it
+		$album['parent_id'] = $user_root_albums[$album['album_user_id']]['album_id'];
+		$albums[$album['album_user_id']][$album['album_id']] = $album;
+	}
+	// Now add all the root albums (the user default albums)
+	foreach ($user_root_albums as $album)
+	{
+		$albums[$album['album_user_id']][$album['album_id']] = $album;
+	}
+
+	foreach ($albums as $user_id => $user_albums)
+	{
+		vb_fix_user_albums($user_albums, $album_last_image);
+	}
+}
+
+function vb_fix_user_albums($user_albums, &$album_last_image)
+{
+	global $db, $phpbb_config_php_file;
+
+	$table_prefix = $phpbb_config_php_file->get('table_prefix');
+
+	//var_dump($user_albums); echo '<br />';
+	$hierarchy = array();
+
+	// Build the hierarchy from the root
+	vb_build_hierarchy($user_albums, $hierarchy, 0, 'album_id');
+
+	$left_id = 0;
+	vb_build_left_right_id($user_albums, $hierarchy, $left_id, 'album_id');
+
+	$new_albums = array();
+	// The list is built, now extract the ones to update and the ones to create
+	foreach ($user_albums as $album_id => $album)
+	{
+		if ($album['parent_id'] == 0)
+		{
+			$new_albums[] = $album;
+		}
+		elseif ($album['parent_id'] > 0)
+		{
+			$parent_name = $user_albums[$album['parent_id']]['album_name'];
+			$album_parents = array(
+				$album['parent_id'] => array(
+					$parent_name,
+					1,
+				),
+			);
+			$update = array(
+				'parent_id' => $album['parent_id'],
+				'left_id' => $album['left_id'],
+				'right_id' => $album['right_id'],
+				'album_parents' => serialize($album_parents),
+				'album_last_image_name' => isset($album_last_image[$album_id]['image_name']) ? $album_last_image[$album_id]['image_name'] : '',
+				'album_last_username' => isset($album_last_image[$album_id]['image_username']) ? $album_last_image[$album_id]['image_username'] : '',
+				'album_last_user_id' => isset($album_last_image[$album_id]['image_user_id']) ? $album_last_image[$album_id]['image_user_id'] : 0,
+			);
+			$sql = 'UPDATE ' . $table_prefix . 'gallery_albums SET ' . $db->sql_build_array('UPDATE', $update) . " WHERE album_id = $album_id";
+			$db->sql_query($sql);
+		}
+	}
+	if (!empty($new_albums))
+	{
+		$db->sql_multi_insert($table_prefix . 'gallery_albums', $new_albums);
+	}
+}
+
+function vb_fix_image_comments()
+{
+	global $db, $phpbb_config_php_file;
+
+	$table_prefix = $phpbb_config_php_file->get('table_prefix');
+
+	$comments = array();
+	$sql = "SELECT comment_image_id, comment_id, max(comment_time) AS max, count(comment_id) AS count FROM {$table_prefix}gallery_comments GROUP BY comment_image_id";
+	$result = $db->sql_query($sql);
+	while ($row = $db->sql_fetchrow($result)) {
+		$comments[] = $row;
+	}
+	$db->sql_freeresult($result);
+	vb_conversion_log("vb_fix_image_comments(): " . count($comments) . " last comment(s) per picture loaded.");
+
+	foreach ($comments as $comment)
+	{
+		$sql = "UPDATE {$table_prefix}gallery_images SET image_comments={$comment['count']}, image_last_comment={$comment['comment_id']} WHERE image_id={$comment['comment_image_id']}";
+		$db->sql_query($sql);
 	}
 }
