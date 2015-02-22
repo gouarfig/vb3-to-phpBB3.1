@@ -13,7 +13,7 @@ set -x
 
 BRANCH=$1
 
-# Copy extension to a temp folder
+# Copy converter to a temp folder
 mkdir ../tmp
 cp -R . ../tmp
 cd ../
@@ -21,3 +21,6 @@ cd ../
 # Clone phpBB
 git clone --depth=1 "git://github.com/phpbb/phpbb.git" "phpBB3" --branch=$BRANCH
 
+# Copy converter into place
+cp -R tmp/. phpBB3/phpBB/
+cd phpBB3
