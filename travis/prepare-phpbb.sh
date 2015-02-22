@@ -22,5 +22,7 @@ cd ../
 git clone --depth=1 "git://github.com/phpbb/phpbb.git" "phpBB3" --branch=$BRANCH
 
 # Copy converter into place
-cp -R tmp/. phpBB3/phpBB/
+cp -R ./tmp/install phpBB3/phpBB/
+# Copy tests into place
+cp -R ./tmp/tests phpBB3/
 cd phpBB3
