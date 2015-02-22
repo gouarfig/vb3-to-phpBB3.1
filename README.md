@@ -29,3 +29,4 @@ Here's the list of what is actually converted from vBulletin:
 - subscribed forums and topics
 - private messages
 - moderator logs (but not the administrator logs)
+- gallery albums, pictures and comments are converted to be used by the phpBBGallery extension (currently in development)
