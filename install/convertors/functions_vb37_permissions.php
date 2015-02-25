@@ -404,7 +404,7 @@ function vb_convert_forum_permissions()
 	$db->sql_query($convert->truncate_statement . ACL_GROUPS_TABLE);
 
 	$dst_permissions = Array();
-	$datastore = new DataStore();
+	$datastore = new ConversionDataStore();
 	$forums = $datastore->getData('forums');
 	$roles = vb_get_roles();
 
@@ -446,7 +446,7 @@ function vb_convert_moderator_permissions()
 	global $db, $src_db, $convert;
 
 	$dst_permissions = Array();
-	$datastore = new DataStore();
+	$datastore = new ConversionDataStore();
 	$forums = $datastore->getData('forums');
 	$roles = vb_get_roles();
 
