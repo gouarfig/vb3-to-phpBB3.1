@@ -44,9 +44,18 @@ function &vb_get_moderators_permissions()
 	global $src_db, $convert;
 	$moderator_permissions = array();
 
-	$sql = "SELECT userid,forumid,permissions AS moderatorpermissions,permissions2 AS moderatorpermissions2"
-			. " FROM {$convert->src_table_prefix}moderator"
-			. " ORDER BY userid,forumid";
+	if (vb_version() >= 370)
+	{
+		$sql = "SELECT userid,forumid,permissions AS moderatorpermissions,permissions2 AS moderatorpermissions2"
+				. " FROM {$convert->src_table_prefix}moderator"
+				. " ORDER BY userid,forumid";
+	}
+	else
+	{
+		$sql = "SELECT userid,forumid,permissions AS moderatorpermissions"
+				. " FROM {$convert->src_table_prefix}moderator"
+				. " ORDER BY userid,forumid";
+	}
 	$result = $src_db->sql_query($sql);
 	while ($row = $src_db->sql_fetchrow($result)) {
 		$row['forumid'] = intval($row['forumid']);

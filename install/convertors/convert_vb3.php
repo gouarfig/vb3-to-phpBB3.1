@@ -19,6 +19,8 @@ if (!defined('IN_PHPBB'))
 	exit;
 }
 
+include 'convert_vb3_config.php';
+
 $phpbb_config_php_file = new \phpbb\config_php_file($phpbb_root_path, $phpEx);
 extract($phpbb_config_php_file->get_all());
 unset($dbpasswd);
@@ -30,8 +32,8 @@ $dbms = $phpbb_config_php_file->convert_30_dbms_to_31($dbms);
 * used on the initial list of convertors and to populate the default settings
 */
 $convertor_data = array(
-	'forum_name'	=> 'vBulletin v3.7.x',
-	'version'		=> '1.0.0-RC6',
+	'forum_name'	=> 'vBulletin versions 3.5 & 3.7',
+	'version'		=> '1.0.0-RC7',
 	'phpbb_version'	=> '3.1.2',
 	'author'		=> '<a href="https://www.phpbb.com/community/memberlist.php?mode=viewprofile&u=1438256">FredQ</a>',
 	'dbms'			=> $dbms,
@@ -56,8 +58,6 @@ $tables = array(
 	'adminlog',
 	'adminmessage',
 	'adminutil',
-	'album',
-	'albumpicture',
 	'announcement',
 	'announcementread',
 	'attachment',
@@ -112,9 +112,6 @@ $tables = array(
 //	'paymenttransaction',
 	'phrase',
 	'phrasetype',
-	'picture',
-	'picturecomment',
-	'picturecomment_hash',
 //	'plugin',
 	'pm',
 	'pmreceipt',
@@ -196,6 +193,12 @@ $tables = array(
 	'visitormessage',
 	'visitormessage_hash',
 	'word',
+	// Not yet in version 3.5
+//	'album',
+//	'albumpicture',
+//	'picture',
+//	'picturecomment',
+//	'picturecomment_hash',
 );
 
 /**
@@ -977,7 +980,7 @@ if (!$get_info)
 				array('topic_type',				'thread.sticky',					''),
 				array('topic_first_post_id',	'thread.firstpostid',				''),
 				array('topic_first_poster_name','thread.postusername',				'vb_set_default_encoding'),
-				array('topic_last_post_id',		'thread.lastpostid',				''),
+				array('topic_last_post_id',		(vb_version()>=370) ? 'thread.lastpostid' : '',				''),
 				array('topic_last_poster_id',	'thread.lastposter',				'vb_get_userid_from_username'),
 				array('topic_last_poster_name',	'thread.lastposter',				'vb_set_default_encoding'),
 				array('topic_last_post_time',	'thread.lastpost',					''),
@@ -991,11 +994,11 @@ if (!$get_info)
 				array('poll_last_vote',			'poll.lastvote',					''),
 				array('poll_vote_change',		0,									''),
 				array('topic_visibility',		'thread.visible',					''),	// Using the same codes :-)
-				array('topic_delete_time',		'deletionlog.dateline AS d_dateline',''),
+				array('topic_delete_time',		(vb_version()>=370) ? 'deletionlog.dateline AS d_dateline' : '',''),
 				array('topic_delete_reason',	'deletionlog.reason AS d_reason',	'vb_set_default_encoding'),
 				array('topic_delete_user',		'deletionlog.userid AS d_user_id',	'vb_user_id'),
 				array('topic_posts_approved',	'thread.replycount',				''),
-				array('topic_posts_softdeleted','thread.deletedcount',				'vb_fix_softdeleted'),
+				array('topic_posts_softdeleted',(vb_version()>=370) ? 'thread.deletedcount' : '',				'vb_fix_softdeleted'),
 
 				'left_join'		=> array(
 									'thread LEFT JOIN poll ON thread.pollid = poll.pollid',
@@ -1055,7 +1058,7 @@ if (!$get_info)
 				array('icon_id',				'post.iconid',						'vb_icon_id'),
 				array('poster_ip',				'post.ipaddress',					''),
 				array('post_time',				'post.dateline AS postdateline',	''),
-				array('post_reported',			'post.reportthreadid',				'is_positive'),
+				array('post_reported',			(vb_version()>=370) ? 'post.reportthreadid' : '',	'is_positive'),
 				array('enable_bbcode',			1,									''),
 				array('enable_smilies',			'post.allowsmilie',					''),
 				array('enable_sig',				'post.showsignature',				''),
@@ -1069,7 +1072,7 @@ if (!$get_info)
 				array('post_edit_reason',		'editlog.reason AS e_reason',		'vb_set_encoding'),
 				array('post_edit_user',			'editlog.userid AS e_userid',		'vb_user_id'),
 
-				array('post_delete_time',		'deletionlog.dateline AS d_dateline',	''),
+				array('post_delete_time',		(vb_version()>=370) ? 'deletionlog.dateline AS d_dateline' : '',	''),
 				array('post_delete_reason',		'deletionlog.reason AS d_reason',		'vb_set_encoding'),
 				array('post_delete_user',		'deletionlog.userid AS d_userid',		'vb_user_id'),
 
@@ -1158,10 +1161,9 @@ if (!$get_info)
 				array('group_legend',			0,									''),
 				array('group_name',				'usergroup.title',					'vb_convert_group_name'), // vb_set_encoding called in vb_convert_group_name
 				array('group_desc',				'usergroup.description',			'vb_set_encoding'),
-				array('group_sig_chars',		'usergroup.sigmaxchars',			''),
+				array('group_sig_chars',		(vb_version()>=370) ? 'usergroup.sigmaxchars' : 0,			''),
 				array('group_max_recipients',	'usergroup.pmsendmax',				''),
 
-				// Yes, this is how vBulletin recognise its default groups - actually this is handy because it's the same number of default groups for phpBB 3.1
 				'where'			=> 'usergroup.usergroupid > 7',
 			),
 
@@ -1213,7 +1215,7 @@ if (!$get_info)
 				array('user_avatar_width',		0,									''),
 				array('user_avatar_height',		0,									''),
 
-				array('user_warnings',			'user.warnings',					''),
+				array('user_warnings',			(vb_version()>=370) ? 'user.warnings' : 0,					''),
 				array('user_new_privmsg',		'user.pmunread',					'is_positive'),
 				array('user_unread_privmsg',	'user.pmunread',					''),
 				array('user_last_privmsg',		0,									'intval'),
@@ -1343,7 +1345,7 @@ if (!$get_info)
 			),
 
 			array(
-				'target'		=> $table_prefix . 'gallery_albums',
+				'target'		=> (defined('CONVERT_ALBUMS') && (CONVERT_ALBUMS == 1)) ? $table_prefix . 'gallery_albums' : '',
 				'primary'		=> 'album.albumid',
 				'execute_first'	=>
 								'vb_create_gallery_tables();'
@@ -1386,7 +1388,7 @@ if (!$get_info)
 			),
 
 			array(
-				'target'		=> $table_prefix . 'gallery_images',
+				'target'		=> (defined('CONVERT_ALBUMS') && (CONVERT_ALBUMS == 1)) ? $table_prefix . 'gallery_images' : '',
 				'primary'		=> 'albumpicture.pictureid',
 				'query_first'	=> array('target', $convert->truncate_statement . $table_prefix . 'gallery_images'),
 
@@ -1430,7 +1432,7 @@ if (!$get_info)
 			),
 
 			array(
-				'target'		=> $table_prefix . 'gallery_comments',
+				'target'		=> (defined('CONVERT_ALBUMS') && (CONVERT_ALBUMS == 1)) ? $table_prefix . 'gallery_comments' : '',
 				'primary'		=> 'picturecomment.commentid',
 				'query_first'	=> array('target', $convert->truncate_statement . $table_prefix . 'gallery_comments'),
 

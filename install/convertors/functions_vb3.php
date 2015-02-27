@@ -20,10 +20,10 @@ require_once 'vbPermission.class.php';
 // Data store to keep data between requests
 require_once 'ConversionDataStore.php';
 // Functions specific to forum permissions
-require_once 'functions_vb37_permissions.php';
+require_once 'functions_vb3_permissions.php';
 
 /**
-* Helper functions for vBulletin 3.7.x to phpBB 3.1.x conversion
+* Helper functions for vBulletin 3 to phpBB 3.1.x conversion
 */
 
 /**
@@ -430,86 +430,55 @@ function vb_add_bbcodes()
 
 	$existing_bbcodes = array();
 	$new_bbcodes = array(
-					'font=' => array(
-						'bbcode_tag' 				=> 'font=',
-    					'bbcode_match' 				=> '[font={SIMPLETEXT}]{TEXT}[/font]',
-					    'bbcode_tpl' 				=> '<span style="font-family: {SIMPLETEXT};">{TEXT}</span>',
-    					'display_on_posting' 		=> '1',
-					    'bbcode_helpline' 			=> 'Change font: [font=Georgia]Georgia font[/font]',
-					    'first_pass_match' 			=> '!\[font\=([a-zA-Z0-9-+.,_ ]+)\](.*?)\[/font\]!ies',
-					    'first_pass_replace' 		=> '\'[font=${1}:$uid]\'.str_replace(array("\\r\\n", \'\\"\', \'\\\'\', \'(\', \')\'), array("\\n", \'"\', \'&#39;\', \'&#40;\', \'&#41;\'), trim(\'${2}\')).\'[/font:$uid]\'',
-					    'second_pass_match' 		=> '!\[font\=([a-zA-Z0-9-+.,_ ]+):$uid\](.*?)\[/font:$uid\]!s',
-					    'second_pass_replace' 		=> '<span style="font-family: ${1};">${2}</span>'
-					),
-					'align=' => array(
-						'bbcode_tag' 				=> 'align=',
-						'bbcode_match'				=> '[align={SIMPLETEXT}]{TEXT}[/align]',
-						'bbcode_tpl'				=> '<div style="text-align: {SIMPLETEXT};">{TEXT}</div>',
-						'display_on_posting'		=> '1',
-						'bbcode_helpline'			=> 'Alignment: can use center, left, right',
-						'first_pass_match'			=> '!\[align\=([a-zA-Z0-9-+.,_ ]+)\](.*?)\[/align\]!ies',
-						'first_pass_replace'		=> '\'[align=${1}:$uid]\'.str_replace(array("\\r\\n", \'\\"\', \'\\\'\', \'(\', \')\'), array("\\n", \'"\', \'&#39;\', \'&#40;\', \'&#41;\'), trim(\'${2}\')).\'[/align:$uid]\'',
-						'second_pass_match'			=> '!\[align\=([a-zA-Z0-9-+.,_ ]+):$uid\](.*?)\[/align:$uid\]!s',
-						'second_pass_replace'		=> '<div style="text-align: ${1};">${2}</div>'
-					),
-//					'left' => array(
-//						'bbcode_tag' 				=> 'left',
-//						'bbcode_match'				=> '[left]{TEXT}[/left]',
-//						'bbcode_tpl'				=> '<div style="text-align: left;">{TEXT}</div>',
-//						'display_on_posting'		=> '1',
-//						'bbcode_helpline'			=> 'Align text to the left: [left]text[/left]',
-//						'first_pass_match'			=> '!\[left\](.*?)\[/left\]!ies',
-//						'first_pass_replace'		=> '\'[left:$uid]\'.str_replace(array("\\r\\n", \'\\"\', \'\\\'\', \'(\', \')\'), array("\\n", \'"\', \'&#39;\', \'&#40;\', \'&#41;\'), trim(\'${1}\')).\'[/left:$uid]\'',
-//						'second_pass_match'			=> '!\[left:$uid\](.*?)\[/left:$uid\]!s',
-//						'second_pass_replace'		=> '<div style="text-align: left;">${1}</div>'
-//					),
-//					'center' => array(
-//						'bbcode_tag' 				=> 'center',
-//						'bbcode_match'				=> '[center]{TEXT}[/center]',
-//						'bbcode_tpl'				=> '<div style="text-align: center;">{TEXT}</div>',
-//						'display_on_posting'		=> '1',
-//						'bbcode_helpline'			=> 'Center text: [center]text[/center]',
-//						'first_pass_match'			=> '!\[center\](.*?)\[/center\]!ies',
-//						'first_pass_replace'		=> '\'[center:$uid]\'.str_replace(array("\\r\\n", \'\\"\', \'\\\'\', \'(\', \')\'), array("\\n", \'"\', \'&#39;\', \'&#40;\', \'&#41;\'), trim(\'${1}\')).\'[/center:$uid]\'',
-//						'second_pass_match'			=> '!\[center:$uid\](.*?)\[/center:$uid\]!s',
-//						'second_pass_replace'		=> '<div style="text-align: center;">${1}</div>'
-//					),
-//					'right' => array(
-//						'bbcode_tag' 				=> 'right',
-//						'bbcode_match'				=> '[right]{TEXT}[/right]',
-//						'bbcode_tpl'				=> '<div style="text-align: right;">{TEXT}</div>',
-//						'display_on_posting'		=> '1',
-//						'bbcode_helpline'			=> 'Align text to the right: [right]text[/right]',
-//						'first_pass_match'			=> '!\[right\](.*?)\[/right\]!ies',
-//						'first_pass_replace'		=> '\'[right:$uid]\'.str_replace(array("\\r\\n", \'\\"\', \'\\\'\', \'(\', \')\'), array("\\n", \'"\', \'&#39;\', \'&#40;\', \'&#41;\'), trim(\'${1}\')).\'[/right:$uid]\'',
-//						'second_pass_match'			=> '!\[right:$uid\](.*?)\[/right:$uid\]!s',
-//						'second_pass_replace'		=> '<div style="text-align: right;">${1}</div>'
-//					),
+			'font=' => array(
+				'bbcode_tag' 				=> 'font=',
+				'bbcode_match' 				=> '[font={SIMPLETEXT}]{TEXT}[/font]',
+				'bbcode_tpl' 				=> '<span style="font-family: {SIMPLETEXT};">{TEXT}</span>',
+				'display_on_posting' 		=> '1',
+				'bbcode_helpline' 			=> 'Change font: [font=Georgia]Georgia font[/font]',
+				'first_pass_match' 			=> '!\[font\=([a-zA-Z0-9-+.,_ ]+)\](.*?)\[/font\]!ies',
+				'first_pass_replace' 		=> '\'[font=${1}:$uid]\'.str_replace(array("\\r\\n", \'\\"\', \'\\\'\', \'(\', \')\'), array("\\n", \'"\', \'&#39;\', \'&#40;\', \'&#41;\'), trim(\'${2}\')).\'[/font:$uid]\'',
+				'second_pass_match' 		=> '!\[font\=([a-zA-Z0-9-+.,_ ]+):$uid\](.*?)\[/font:$uid\]!s',
+				'second_pass_replace' 		=> '<span style="font-family: ${1};">${2}</span>'
+			),
+			'align=' => array(
+				'bbcode_tag' 				=> 'align=',
+				'bbcode_match'				=> '[align={SIMPLETEXT}]{TEXT}[/align]',
+				'bbcode_tpl'				=> '<div style="text-align: {SIMPLETEXT};">{TEXT}</div>',
+				'display_on_posting'		=> '1',
+				'bbcode_helpline'			=> 'Alignment: can use center, left, right',
+				'first_pass_match'			=> '!\[align\=([a-zA-Z0-9-+.,_ ]+)\](.*?)\[/align\]!ies',
+				'first_pass_replace'		=> '\'[align=${1}:$uid]\'.str_replace(array("\\r\\n", \'\\"\', \'\\\'\', \'(\', \')\'), array("\\n", \'"\', \'&#39;\', \'&#40;\', \'&#41;\'), trim(\'${2}\')).\'[/align:$uid]\'',
+				'second_pass_match'			=> '!\[align\=([a-zA-Z0-9-+.,_ ]+):$uid\](.*?)\[/align:$uid\]!s',
+				'second_pass_replace'		=> '<div style="text-align: ${1};">${2}</div>'
+			),
 
-					'indent' => array(
-						'bbcode_tag' 				=> 'indent',
-						'bbcode_match'				=> '[indent]{TEXT}[/indent]',
-						'bbcode_tpl'				=> '<span style="margin-left: 20px">{TEXT}</span>',
-						'display_on_posting'		=> '1',
-						'bbcode_helpline'			=> 'Indentation: [indent]text[/indent]',
-						'first_pass_match'			=> '!\[indent\](.*?)\[/indent\]!ies',
-						'first_pass_replace'		=> '\'[indent:$uid]\'.str_replace(array("\\r\\n", \'\\"\', \'\\\'\', \'(\', \')\'), array("\\n", \'"\', \'&#39;\', \'&#40;\', \'&#41;\'), trim(\'${1}\')).\'[/indent:$uid]\'',
-						'second_pass_match'			=> '!\[indent:$uid\](.*?)\[/indent:$uid\]!s',
-						'second_pass_replace'		=> '<span style="margin-left: 20px">${1}</span>'
-					),
-
-					'sigpic' => array(
-						'bbcode_tag' 				=> 'sigpic',
-    					'bbcode_match' 				=> '[sigpic]{TEXT}[/sigpic]',
-					    'bbcode_tpl' 				=> '<table class="ModTable" style="background-color:#FFFFFF;border:1px solid #000000;border-collapse:separate;border-spacing:5px;padding:0;width:100%;color:#333333;overflow:hidden;"><tr><td class="exclamation" rowspan="2" style="background-color:#ff6060;font-weight:bold;font-family:\'Times New Roman\',Verdana,sans-serif;font-size:4em;color:#ffffff;vertical-align:middle;text-align:center;width:1%;">&nbsp;!&nbsp;</td><td class="rowuser" style="border-bottom:1px solid #000000;font-weight:bold;">Warning</td></tr><tr><td class="row text">The signature picture extension is not installed.</td></tr></table>',
-    					'display_on_posting' 		=> '0',
-					    'bbcode_helpline' 			=> 'Display signature picture: [sigpic][/sigpic]',
-						'first_pass_match'			=> '!\[sigpic\](.*?)\[/sigpic\]!ies',
-						'first_pass_replace'		=> '\'[sigpic:$uid]\'.str_replace(array("\\r\\n", \'\\"\', \'\\\'\', \'(\', \')\'), array("\\n", \'"\', \'&#39;\', \'&#40;\', \'&#41;\'), trim(\'${1}\')).\'[/sigpic:$uid]\'',
-						'second_pass_match'			=> '!\[sigpic:$uid\](.*?)\[/sigpic:$uid\]!s',
-					    'second_pass_replace' 		=> '<table class="ModTable" style="background-color:#FFFFFF;border:1px solid #000000;border-collapse:separate;border-spacing:5px;padding:0;width:100%;color:#333333;overflow:hidden;"><tr><td class="exclamation" rowspan="2" style="background-color:#ff6060;font-weight:bold;font-family:\'Times New Roman\',Verdana,sans-serif;font-size:4em;color:#ffffff;vertical-align:middle;text-align:center;width:1%;">&nbsp;!&nbsp;</td><td class="rowuser" style="border-bottom:1px solid #000000;font-weight:bold;">Warning</td></tr><tr><td class="row text">The signature picture extension is not installed.</td></tr></table>'
-					),
+			'indent' => array(
+				'bbcode_tag' 				=> 'indent',
+				'bbcode_match'				=> '[indent]{TEXT}[/indent]',
+				'bbcode_tpl'				=> '<span style="margin-left: 20px">{TEXT}</span>',
+				'display_on_posting'		=> '1',
+				'bbcode_helpline'			=> 'Indentation: [indent]text[/indent]',
+				'first_pass_match'			=> '!\[indent\](.*?)\[/indent\]!ies',
+				'first_pass_replace'		=> '\'[indent:$uid]\'.str_replace(array("\\r\\n", \'\\"\', \'\\\'\', \'(\', \')\'), array("\\n", \'"\', \'&#39;\', \'&#40;\', \'&#41;\'), trim(\'${1}\')).\'[/indent:$uid]\'',
+				'second_pass_match'			=> '!\[indent:$uid\](.*?)\[/indent:$uid\]!s',
+				'second_pass_replace'		=> '<span style="margin-left: 20px">${1}</span>'
+			),
+	);
+	if (vb_version() >= 370)
+	{
+		$new_bbcodes['sigpic'] = array(
+				'bbcode_tag' 				=> 'sigpic',
+				'bbcode_match' 				=> '[sigpic]{TEXT}[/sigpic]',
+				'bbcode_tpl' 				=> '<table class="ModTable" style="background-color:#FFFFFF;border:1px solid #000000;border-collapse:separate;border-spacing:5px;padding:0;width:100%;color:#333333;overflow:hidden;"><tr><td class="exclamation" rowspan="2" style="background-color:#ff6060;font-weight:bold;font-family:\'Times New Roman\',Verdana,sans-serif;font-size:4em;color:#ffffff;vertical-align:middle;text-align:center;width:1%;">&nbsp;!&nbsp;</td><td class="rowuser" style="border-bottom:1px solid #000000;font-weight:bold;">Warning</td></tr><tr><td class="row text">The signature picture extension is not installed.</td></tr></table>',
+				'display_on_posting' 		=> '0',
+				'bbcode_helpline' 			=> 'Display signature picture: [sigpic][/sigpic]',
+				'first_pass_match'			=> '!\[sigpic\](.*?)\[/sigpic\]!ies',
+				'first_pass_replace'		=> '\'[sigpic:$uid]\'.str_replace(array("\\r\\n", \'\\"\', \'\\\'\', \'(\', \')\'), array("\\n", \'"\', \'&#39;\', \'&#40;\', \'&#41;\'), trim(\'${1}\')).\'[/sigpic:$uid]\'',
+				'second_pass_match'			=> '!\[sigpic:$uid\](.*?)\[/sigpic:$uid\]!s',
+				'second_pass_replace' 		=> '<table class="ModTable" style="background-color:#FFFFFF;border:1px solid #000000;border-collapse:separate;border-spacing:5px;padding:0;width:100%;color:#333333;overflow:hidden;"><tr><td class="exclamation" rowspan="2" style="background-color:#ff6060;font-weight:bold;font-family:\'Times New Roman\',Verdana,sans-serif;font-size:4em;color:#ffffff;vertical-align:middle;text-align:center;width:1%;">&nbsp;!&nbsp;</td><td class="rowuser" style="border-bottom:1px solid #000000;font-weight:bold;">Warning</td></tr><tr><td class="row text">The signature picture extension is not installed.</td></tr></table>'
 			);
+	}
 
 	$sql = "SELECT bbcodetag,bbcodereplacement,bbcodeexplanation,twoparams FROM {$convert->src_table_prefix}bbcode";
 	$result = $src_db->sql_query($sql);
@@ -908,20 +877,23 @@ function add_user_sigpic_fields()
 {
 	global $db, $phpbb_container;
 
-	$columns = array(
-		'user_sigpic' => array('VCHAR', ''),
-		'user_sigpic_width' => array('USINT', 0),
-		'user_sigpic_height' => array('USINT', 0),
-	);
-
-	$db_tools = $phpbb_container->get('dbal.tools');
-
-	foreach ($columns as $column_name => $column_type)
+	if (vb_version() >= 370)
 	{
-		if (!$db_tools->sql_column_exists(USERS_TABLE, $column_name)) {
-			$db_tools->sql_column_add(USERS_TABLE, $column_name, $column_type);
-		} else {
-			vb_conversion_log("add_user_sigpic_field(): WARNING column '{$column_name}' already exists in '" . USERS_TABLE . "'.");
+		$columns = array(
+			'user_sigpic' => array('VCHAR', ''),
+			'user_sigpic_width' => array('USINT', 0),
+			'user_sigpic_height' => array('USINT', 0),
+		);
+
+		$db_tools = $phpbb_container->get('dbal.tools');
+
+		foreach ($columns as $column_name => $column_type)
+		{
+			if (!$db_tools->sql_column_exists(USERS_TABLE, $column_name)) {
+				$db_tools->sql_column_add(USERS_TABLE, $column_name, $column_type);
+			} else {
+				vb_conversion_log("add_user_sigpic_field(): WARNING column '{$column_name}' already exists in '" . USERS_TABLE . "'.");
+			}
 		}
 	}
 }
@@ -981,7 +953,8 @@ function get_default_group_id_from_vb_name($group_name) {
 function vb_convert_default_groups() {
 	global $db, $src_db, $convert;
 
-	$sql = "SELECT usergroupid,title,description,pmquota,pmsendmax,ispublicgroup,forumpermissions,pmpermissions,calendarpermissions,wolpermissions,adminpermissions,genericpermissions,genericpermissions2,genericoptions,signaturepermissions,visitormessagepermissions,attachlimit,avatarmaxwidth,avatarmaxheight,avatarmaxsize,profilepicmaxwidth,profilepicmaxheight,profilepicmaxsize,sigpicmaxwidth,sigpicmaxheight,sigpicmaxsize,sigmaximages,sigmaxsizebbcode,sigmaxchars,sigmaxrawchars,sigmaxlines,albumpermissions,albumpicmaxwidth,albumpicmaxheight,albumpicmaxsize,albummaxpics,albummaxsize"
+	//$sql = "SELECT usergroupid,title,description,pmquota,pmsendmax,ispublicgroup,forumpermissions,pmpermissions,calendarpermissions,wolpermissions,adminpermissions,genericpermissions,genericpermissions2,genericoptions,signaturepermissions,visitormessagepermissions,attachlimit,avatarmaxwidth,avatarmaxheight,avatarmaxsize,profilepicmaxwidth,profilepicmaxheight,profilepicmaxsize,sigpicmaxwidth,sigpicmaxheight,sigpicmaxsize,sigmaximages,sigmaxsizebbcode,sigmaxchars,sigmaxrawchars,sigmaxlines,albumpermissions,albumpicmaxwidth,albumpicmaxheight,albumpicmaxsize,albummaxpics,albummaxsize"
+	$sql = "SELECT *"
 			. " FROM {$convert->src_table_prefix}usergroup"
 			. " WHERE usergroupid <= 7";
 	$result = $src_db->sql_query($sql);
@@ -1290,8 +1263,11 @@ function vb_set_board_startdate()
 	$result = $db->sql_query_limit($sql,1);
 	$start = $db->sql_fetchfield('post_time');
 	$db->sql_freeresult($result);
-	$sql = 'UPDATE '.CONFIG_TABLE.' SET config_value='.$start.' WHERE config_name="board_startdate"';
-	$db->sql_query($sql);
+	if (!empty($start))
+	{
+		$sql = 'UPDATE '.CONFIG_TABLE.' SET config_value='.$start.' WHERE config_name="board_startdate"';
+		$db->sql_query($sql);
+	}
 }
 
 /**
@@ -1572,49 +1548,52 @@ function vb_import_signaturepic($signaturepic_path = null)
 {
 	global $db, $src_db, $convert, $config, $phpbb_root_path;
 
-	if (!is_null($signaturepic_path)) {
-		$config['signaturepic_path'] = $signaturepic_path;
-	} else {
-		$config['signaturepic_path'] = 'images/signature_pics';
-	}
-	$destination_path = $phpbb_root_path;
-	if (substr($destination_path, -1) != '/') {
-		$destination_path .= '/';
-	}
-	$destination_path .= $config['signaturepic_path'];
-	if (!file_exists($destination_path)) {
-		mkdir($destination_path);
-	}
-	if (!is_writeable($destination_path)) {
-		$convert->p_master->error("Custom signature pictures path is not writeable: {$destination_path}", __LINE__, __FILE__);
-		exit();
-	}
-
-	$sql = 'SELECT * FROM '. $convert->src_table_prefix . 'sigpic';
-	$result = $src_db->sql_query($sql);
-	while ($row = $src_db->sql_fetchrow($result))
+	if (vb_version() >= 370)
 	{
-		$signaturepic_src = $row['filename'];
-		$signaturepic_data = $row['filedata'];
-		$signaturepic_userid = vb_user_id($row['userid']);
-
-		$signaturepic_dest = $destination_path . '/' . $config['avatar_salt'] . '_' . $signaturepic_userid . '.' . vb_file_ext($signaturepic_src);
-		$user_sigpic = $signaturepic_userid . '_' . time() . '.' . vb_file_ext($signaturepic_src);
-		$sigpic_width = $row['width'];
-		$sigpic_height = $row['height'];
-		if ($fp = fopen($signaturepic_dest, "w"))
-		{
-			fwrite($fp, $signaturepic_data);
-			fclose($fp);
+		if (!is_null($signaturepic_path)) {
+			$config['signaturepic_path'] = $signaturepic_path;
+		} else {
+			$config['signaturepic_path'] = 'images/signature_pics';
 		}
-		$sql = 'UPDATE ' . USERS_TABLE . ' SET '
-				. 'user_sigpic="' . $user_sigpic . '", '
-				. 'user_sigpic_width=' . $sigpic_width . ', '
-				. 'user_sigpic_height=' . $sigpic_height . ' '
-				. 'WHERE user_id=' . vb_user_id($row['userid']);
-		$db->sql_query($sql);
+		$destination_path = $phpbb_root_path;
+		if (substr($destination_path, -1) != '/') {
+			$destination_path .= '/';
+		}
+		$destination_path .= $config['signaturepic_path'];
+		if (!file_exists($destination_path)) {
+			mkdir($destination_path);
+		}
+		if (!is_writeable($destination_path)) {
+			$convert->p_master->error("Custom signature pictures path is not writeable: {$destination_path}", __LINE__, __FILE__);
+			exit();
+		}
+
+		$sql = 'SELECT * FROM '. $convert->src_table_prefix . 'sigpic';
+		$result = $src_db->sql_query($sql);
+		while ($row = $src_db->sql_fetchrow($result))
+		{
+			$signaturepic_src = $row['filename'];
+			$signaturepic_data = $row['filedata'];
+			$signaturepic_userid = vb_user_id($row['userid']);
+
+			$signaturepic_dest = $destination_path . '/' . $config['avatar_salt'] . '_' . $signaturepic_userid . '.' . vb_file_ext($signaturepic_src);
+			$user_sigpic = $signaturepic_userid . '_' . time() . '.' . vb_file_ext($signaturepic_src);
+			$sigpic_width = $row['width'];
+			$sigpic_height = $row['height'];
+			if ($fp = fopen($signaturepic_dest, "w"))
+			{
+				fwrite($fp, $signaturepic_data);
+				fclose($fp);
+			}
+			$sql = 'UPDATE ' . USERS_TABLE . ' SET '
+					. 'user_sigpic="' . $user_sigpic . '", '
+					. 'user_sigpic_width=' . $sigpic_width . ', '
+					. 'user_sigpic_height=' . $sigpic_height . ' '
+					. 'WHERE user_id=' . vb_user_id($row['userid']);
+			$db->sql_query($sql);
+		}
+		$src_db->sql_freeresult($result);
 	}
-	$src_db->sql_freeresult($result);
 }
 
 /**
@@ -2066,8 +2045,14 @@ function vb_convert_profile_custom_fields()
 	$db->sql_freeresult($result);
 	vb_conversion_log("vb_convert_profile_custom_fields(): " . count($languages) . " languages loaded from phpBB.");
 
-	$sql = "SELECT profilefieldid,required,hidden,maxlength,size,displayorder,editable,type,data,height,def,optional,searchable,memberlist,regex,form,html,perline"
-			. " FROM {$convert->src_table_prefix}profilefield ORDER BY displayorder";
+	if (vb_version() >= 370)
+	{
+		$sql = "SELECT profilefieldid,required,hidden,maxlength,size,displayorder,editable,type,data,height,def,optional,searchable,memberlist,regex,form,html"
+				. " FROM {$convert->src_table_prefix}profilefield ORDER BY displayorder";
+	} else {
+		$sql = "SELECT profilefieldid,title,description,required,hidden,maxlength,size,displayorder,editable,type,data,height,def,optional,searchable,memberlist,regex,form,html"
+				. " FROM {$convert->src_table_prefix}profilefield ORDER BY displayorder";
+	}
 	$result = $src_db->sql_query($sql);
 
 	$profilefields = array();
@@ -2092,27 +2077,34 @@ function vb_convert_profile_custom_fields()
 	$db->sql_freeresult($result);
 	vb_conversion_log("vb_convert_profile_custom_fields(): " . count($existing_fields) . " existing profile field(s) loaded.");
 
-	$sql = "SELECT languageid,phrasegroup_cprofilefield FROM {$convert->src_table_prefix}language WHERE languagecode='{$languagecode}'";
-	$result = $src_db->sql_query($sql);
-	$row = $src_db->sql_fetchrow($result);
-	if (!empty($row)) {
-		$definition = unserialize($row['phrasegroup_cprofilefield']);
+	$definition = array();
+	if (vb_version() >= 370)
+	{
+		$sql = "SELECT languageid,phrasegroup_cprofilefield FROM {$convert->src_table_prefix}language WHERE languagecode='{$languagecode}'";
+		$result = $src_db->sql_query($sql);
+		$row = $src_db->sql_fetchrow($result);
+		if (!empty($row)) {
+			$definition = unserialize($row['phrasegroup_cprofilefield']);
+		}
+	}
 
-		for ($i=0; $i <count($profilefields); $i++) {
-			$id = $profilefields[$i]['profilefieldid'];
-			$field_desc = "field{$id}_desc";
-			$field_title = "field{$id}_title";
-			if (isset($definition[$field_desc]) && isset($definition[$field_title])) {
-				$profilefields[$i]['desc'] = $definition[$field_desc];
-				$profilefields[$i]['title'] = $definition[$field_title];
-				if (isset($convert->convertor['profilefields_convert_table'][$profilefields[$i]['title']])) {
-					$profilefields[$i]['name'] = $convert->convertor['profilefields_convert_table'][$profilefields[$i]['title']];
-				} else {
-					$profilefields[$i]['name'] = vb_build_field_name($profilefields[$i]);
-				}
+	for ($i=0; $i <count($profilefields); $i++) {
+		$id = $profilefields[$i]['profilefieldid'];
+		$field_desc = "field{$id}_desc";
+		$field_title = "field{$id}_title";
+		if (isset($definition[$field_desc]) && isset($definition[$field_title])) {
+			$profilefields[$i]['description'] = $definition[$field_desc];
+			$profilefields[$i]['title'] = $definition[$field_title];
+		}
+		if (isset($profilefields[$i]['title']))
+		{
+			if (isset($convert->convertor['profilefields_convert_table'][$profilefields[$i]['title']])) {
+				$profilefields[$i]['name'] = $convert->convertor['profilefields_convert_table'][$profilefields[$i]['title']];
 			} else {
-				vb_conversion_log("vb_convert_profile_custom_fields(): WARNING not enough information to import profile field ID {$id}.");
+				$profilefields[$i]['name'] = vb_build_field_name($profilefields[$i]);
 			}
+		} else {
+			vb_conversion_log("vb_convert_profile_custom_fields(): WARNING not enough information to import profile field ID {$id}.");
 		}
 	}
 
@@ -2199,7 +2191,7 @@ function vb_convert_profile_custom_fields()
 					'field_id' => $field_id,
 					'lang_id' => $lang_id,
 					'lang_name' => $profilefield['title'],
-					'lang_explain' => $profilefield['desc'],
+					'lang_explain' => $profilefield['description'],
 				);
 				$new_profile_field_langs[] = $new_profile_field_lang;
 			}
@@ -2322,7 +2314,7 @@ function vb_fix_softdeleted($deletedcount)
 	global $convert_row;
 
 	$softdeleted = intval($deletedcount);
-	if (($softdeleted == 0) && (intval($convert_row['d_dateline']) > 0)) {
+	if (($softdeleted == 0) && (isset($convert_row['d_dateline'])) && (intval($convert_row['d_dateline']) > 0)) {
 		$softdeleted = 1;
 	}
 	return $softdeleted;
@@ -2505,12 +2497,15 @@ function vb_import_edited_posts_counter()
 {
 	global $src_db, $db, $convert;
 
-	$sql = "SELECT postid,count(postedithistoryid) AS nb FROM {$convert->src_table_prefix}postedithistory GROUP BY postid HAVING count(postedithistoryid)>2";
-	$result = $src_db->sql_query($sql);
-	while ($row = $src_db->sql_fetchrow($result)) {
-		$db->sql_query("UPDATE " . POSTS_TABLE . " SET post_edit_count=" . (intval($row['nb']) -1) . " WHERE post_id=" . $row['postid']);
+	if (vb_version() >= 370)
+	{
+		$sql = "SELECT postid,count(postedithistoryid) AS nb FROM {$convert->src_table_prefix}postedithistory GROUP BY postid HAVING count(postedithistoryid)>2";
+		$result = $src_db->sql_query($sql);
+		while ($row = $src_db->sql_fetchrow($result)) {
+			$db->sql_query("UPDATE " . POSTS_TABLE . " SET post_edit_count=" . (intval($row['nb']) -1) . " WHERE post_id=" . $row['postid']);
+		}
+		$src_db->sql_freeresult($result);
 	}
-	$src_db->sql_freeresult($result);
 }
 
 
@@ -3040,124 +3035,132 @@ function vb_convert_infractions()
 {
 	global $src_db, $db, $convert;
 
-	$db->sql_query($convert->truncate_statement . WARNINGS_TABLE);
-
-	$infractions = array();
-	$sql = "SELECT infractionid,infractionlevelid,i.postid,i.userid,whoadded,points,i.dateline,note,action,actiondateline,actionuserid,actionreason,expires,i.threadid,customreason,t.forumid"
-			. " FROM {$convert->src_table_prefix}infraction i"
-			. " LEFT JOIN {$convert->src_table_prefix}thread t ON i.threadid=t.threadid";
-	$result = $src_db->sql_query($sql);
-	if ($row = $src_db->sql_fetchrow($result)) {
-		$infractions[] = $row;
-	}
-	$src_db->sql_freeresult($result);
-
-	$sql = "SELECT MAX(log_id) AS max_log_id FROM " . LOG_TABLE;
-	$result = $db->sql_query($sql);
-	$max_log_id = (int) $db->sql_fetchfield('max_log_id');
-	$db->sql_freeresult($result);
-
-	$logs = array();
-	$warnings = array();
-	$user_warnings = array();
-	foreach ($infractions as $infraction)
+	if (vb_version() >= 370)
 	{
-		$max_log_id++;
-		$log1 = array(
-			'log_id' => $max_log_id,
-			'log_type' => LOG_ADMIN,
-			'user_id' => vb_user_id($infraction['whoadded']),
-			'forum_id' => 0,
-			'topic_id' => 0,
-			'reportee_id' => 0,
-			'log_ip' => '',
-			'log_time' => $infraction['dateline'],
-			'log_operation' => 'LOG_USER_WARNING',
-			'log_data' => serialize(
-							array(
-								vb_get_user_name($infraction['userid']),
-							)
-						),
-		);
-		$logs[] = $log1;
+		$db->sql_query($convert->truncate_statement . WARNINGS_TABLE);
 
-		$max_log_id++;
-		$log2 = array(
-			'log_id' => $max_log_id,
-			'log_type' => LOG_USERS,
-			'user_id' => vb_user_id($infraction['whoadded']),
-			'forum_id' => 0,
-			'topic_id' => 0,
-			'reportee_id' => vb_user_id($infraction['userid']),
-			'log_ip' => '',
-			'log_time' => $infraction['dateline'],
-			'log_operation' => 'LOG_USER_WARNING_BODY',
-			'log_data' => serialize(
-							array(
-								vb_set_encoding($infraction['customreason']),
-							)
-						),
-		);
-		$logs[] = $log2;
-
-		$max_log_id++;
-		$log3 = array(
-			'log_id' => $max_log_id,
-			'log_type' => LOG_MOD,
-			'user_id' => vb_user_id($infraction['whoadded']),
-			'forum_id' => $infraction['forumid'],
-			'topic_id' => $infraction['threadid'],
-			'reportee_id' => 0,
-			'log_ip' => '',
-			'log_time' => $infraction['dateline'],
-			'log_operation' => 'LOG_USER_WARNING',
-			'log_data' => serialize(
-					array(
-						vb_get_user_name($infraction['userid']),
-					)
-			),
-		);
-		$logs[] = $log3;
-
-		$warning = array(
-			'warning_id' => $infraction['infractionid'],
-			'user_id' => vb_user_id($infraction['userid']),
-			'post_id' => $infraction['postid'],
-			'log_id' => $max_log_id -1,
-			'warning_time' => $infraction['dateline'],
-		);
-		$warnings[] = $warning;
-
-		$user_id = vb_user_id($infraction['userid']);
-		if (!isset($user_warnings[$user_id]))
-		{
-			$user_warnings[$user_id] = array(
-				'count' => 1,
-				'last' => $infraction['dateline']
-			);
+		$infractions = array();
+		$sql = "SELECT infractionid,infractionlevelid,i.postid,i.userid,whoadded,points,i.dateline,note,action,actiondateline,actionuserid,actionreason,expires,i.threadid,customreason,t.forumid"
+				. " FROM {$convert->src_table_prefix}infraction i"
+				. " LEFT JOIN {$convert->src_table_prefix}thread t ON i.threadid=t.threadid";
+		$result = $src_db->sql_query($sql);
+		if ($row = $src_db->sql_fetchrow($result)) {
+			$infractions[] = $row;
 		}
-		else
+		$src_db->sql_freeresult($result);
+
+		$sql = "SELECT MAX(log_id) AS max_log_id FROM " . LOG_TABLE;
+		$result = $db->sql_query($sql);
+		$max_log_id = (int) $db->sql_fetchfield('max_log_id');
+		$db->sql_freeresult($result);
+
+		$logs = array();
+		$warnings = array();
+		$user_warnings = array();
+		foreach ($infractions as $infraction)
 		{
-			$user_warnings[$user_id]['count']++;
-			if ($user_last_warnings[$user_id]['last'] < $infraction['dateline'])
+			$max_log_id++;
+			$log1 = array(
+				'log_id' => $max_log_id,
+				'log_type' => LOG_ADMIN,
+				'user_id' => vb_user_id($infraction['whoadded']),
+				'forum_id' => 0,
+				'topic_id' => 0,
+				'reportee_id' => 0,
+				'log_ip' => '',
+				'log_time' => $infraction['dateline'],
+				'log_operation' => 'LOG_USER_WARNING',
+				'log_data' => serialize(
+								array(
+									vb_get_user_name($infraction['userid']),
+								)
+							),
+			);
+			$logs[] = $log1;
+
+			$max_log_id++;
+			$log2 = array(
+				'log_id' => $max_log_id,
+				'log_type' => LOG_USERS,
+				'user_id' => vb_user_id($infraction['whoadded']),
+				'forum_id' => 0,
+				'topic_id' => 0,
+				'reportee_id' => vb_user_id($infraction['userid']),
+				'log_ip' => '',
+				'log_time' => $infraction['dateline'],
+				'log_operation' => 'LOG_USER_WARNING_BODY',
+				'log_data' => serialize(
+								array(
+									vb_set_encoding($infraction['customreason']),
+								)
+							),
+			);
+			$logs[] = $log2;
+
+			$max_log_id++;
+			$log3 = array(
+				'log_id' => $max_log_id,
+				'log_type' => LOG_MOD,
+				'user_id' => vb_user_id($infraction['whoadded']),
+				'forum_id' => $infraction['forumid'],
+				'topic_id' => $infraction['threadid'],
+				'reportee_id' => 0,
+				'log_ip' => '',
+				'log_time' => $infraction['dateline'],
+				'log_operation' => 'LOG_USER_WARNING',
+				'log_data' => serialize(
+						array(
+							vb_get_user_name($infraction['userid']),
+						)
+				),
+			);
+			$logs[] = $log3;
+
+			$warning = array(
+				'warning_id' => $infraction['infractionid'],
+				'user_id' => vb_user_id($infraction['userid']),
+				'post_id' => $infraction['postid'],
+				'log_id' => $max_log_id -1,
+				'warning_time' => $infraction['dateline'],
+			);
+			$warnings[] = $warning;
+
+			$user_id = vb_user_id($infraction['userid']);
+			if (!isset($user_warnings[$user_id]))
 			{
-				$user_last_warnings[$user_id]['last'] = $infraction['dateline'];
+				$user_warnings[$user_id] = array(
+					'count' => 1,
+					'last' => $infraction['dateline']
+				);
+			}
+			else
+			{
+				$user_warnings[$user_id]['count']++;
+				if ($user_last_warnings[$user_id]['last'] < $infraction['dateline'])
+				{
+					$user_last_warnings[$user_id]['last'] = $infraction['dateline'];
+				}
+			}
+
+		}
+		if (!empty($warnings) && !empty($logs)) {
+			$db->sql_multi_insert(LOG_TABLE, $logs);
+			$db->sql_multi_insert(WARNINGS_TABLE, $warnings);
+		}
+		if (!empty($user_warnings))
+		{
+			foreach ($user_warnings as $user_id => $user_warning)
+			{
+				$sql = "UPDATE " . USERS_TABLE . " SET user_warnings={$user_warning['count']}, user_last_warning={$user_warning['last']} WHERE user_id={$user_id}";
+				$db->sql_query($sql);
 			}
 		}
+	}
+}
 
-	}
-	if (!empty($warnings) && !empty($logs)) {
-		$db->sql_multi_insert(LOG_TABLE, $logs);
-		$db->sql_multi_insert(WARNINGS_TABLE, $warnings);
-	}
-	if (!empty($user_warnings))
-	{
-		foreach ($user_warnings as $user_id => $user_warning)
-		{
-			$sql = "UPDATE " . USERS_TABLE . " SET user_warnings={$user_warning['count']}, user_last_warning={$user_warning['last']} WHERE user_id={$user_id}";
-			$db->sql_query($sql);
-		}
-	}
+function vb_is_convert_albums()
+{
+	return (defined('CONVERT_ALBUMS') && (CONVERT_ALBUMS == 1) && (vb_version() >= 370));
 }
 
 /**
@@ -3172,15 +3175,18 @@ function vb_create_gallery_tables()
 	global $phpbb_container, $convert, $phpbb_config_php_file;
 	$table_prefix = $phpbb_config_php_file->get('table_prefix');
 
-	$db_tools = $phpbb_container->get('dbal.tools');
+	if (vb_is_convert_albums())
+	{
+		$db_tools = $phpbb_container->get('dbal.tools');
 
-	foreach ($convert->convertor['gallery_extension'] as $table_name => $table_data) {
-		$table_name = $table_prefix . $table_name;
-		if (!$db_tools->sql_table_exists($table_name)) {
-			$db_tools->sql_create_table($table_name, $table_data);
-			vb_conversion_log("vb_create_gallery_tables(): '{$table_name}' created.");
-		} else {
-			vb_conversion_log("vb_create_gallery_tables(): WARNING table '{$table_name}' already exists.");
+		foreach ($convert->convertor['gallery_extension'] as $table_name => $table_data) {
+			$table_name = $table_prefix . $table_name;
+			if (!$db_tools->sql_table_exists($table_name)) {
+				$db_tools->sql_create_table($table_name, $table_data);
+				vb_conversion_log("vb_create_gallery_tables(): '{$table_name}' created.");
+			} else {
+				vb_conversion_log("vb_create_gallery_tables(): WARNING table '{$table_name}' already exists.");
+			}
 		}
 	}
 }
@@ -3194,17 +3200,20 @@ function vb_create_gallery_file_system()
 {
 	global $phpbb_root_path;
 
-	$phpbbgallery_core_file = $phpbb_root_path . 'files/phpbbgallery/core';
-	$phpbbgallery_core_file_medium = $phpbb_root_path . 'files/phpbbgallery/core/medium';
-	$phpbbgallery_core_file_mini = $phpbb_root_path . 'files/phpbbgallery/core/mini';
-	$phpbbgallery_core_file_source = $phpbb_root_path . 'files/phpbbgallery/core/source';
-
-	if (is_writable($phpbb_root_path . 'files'))
+	if (vb_is_convert_albums())
 	{
-		@mkdir($phpbbgallery_core_file, 0755, true);
-		@mkdir($phpbbgallery_core_file_medium, 0755, true);
-		@mkdir($phpbbgallery_core_file_mini, 0755, true);
-		@mkdir($phpbbgallery_core_file_source, 0755, true);
+		$phpbbgallery_core_file = $phpbb_root_path . 'files/phpbbgallery/core';
+		$phpbbgallery_core_file_medium = $phpbb_root_path . 'files/phpbbgallery/core/medium';
+		$phpbbgallery_core_file_mini = $phpbb_root_path . 'files/phpbbgallery/core/mini';
+		$phpbbgallery_core_file_source = $phpbb_root_path . 'files/phpbbgallery/core/source';
+
+		if (is_writable($phpbb_root_path . 'files'))
+		{
+			@mkdir($phpbbgallery_core_file, 0755, true);
+			@mkdir($phpbbgallery_core_file_medium, 0755, true);
+			@mkdir($phpbbgallery_core_file_mini, 0755, true);
+			@mkdir($phpbbgallery_core_file_source, 0755, true);
+		}
 	}
 }
 
@@ -3250,87 +3259,90 @@ function vb_fix_albums()
 
 	$table_prefix = $phpbb_config_php_file->get('table_prefix');
 
-	$album_id = 0;
-	$existing_albums = array();
-	$users = array();
-	$sql = "SELECT * FROM {$table_prefix}gallery_albums";
-	$result = $db->sql_query($sql);
-	while ($row = $db->sql_fetchrow($result)) {
-		$existing_albums[] = $row;
-		$users[$row['album_user_id']] = -1;
-		if ($row['album_id'] > $album_id)
-		{
-			$album_id = $row['album_id'];
+	if (vb_is_convert_albums())
+	{
+		$album_id = 0;
+		$existing_albums = array();
+		$users = array();
+		$sql = "SELECT * FROM {$table_prefix}gallery_albums";
+		$result = $db->sql_query($sql);
+		while ($row = $db->sql_fetchrow($result)) {
+			$existing_albums[] = $row;
+			$users[$row['album_user_id']] = -1;
+			if ($row['album_id'] > $album_id)
+			{
+				$album_id = $row['album_id'];
+			}
 		}
-	}
-	$db->sql_freeresult($result);
-	vb_conversion_log("vb_fix_albums(): " . count($existing_albums) . " album(s) loaded.");
+		$db->sql_freeresult($result);
+		vb_conversion_log("vb_fix_albums(): " . count($existing_albums) . " album(s) loaded.");
 
-	$album_last_image = array();
-	$sql = "SELECT image_album_id,max(image_time),image_name,image_user_id,image_username FROM {$table_prefix}gallery_images GROUP BY image_album_id";
-	$result = $db->sql_query($sql);
-	while ($row = $db->sql_fetchrow($result)) {
-		$album_last_image[$row['image_album_id']] = $row;
-	}
-	$db->sql_freeresult($result);
+		$album_last_image = array();
+		$sql = "SELECT image_album_id,max(image_time),image_name,image_user_id,image_username FROM {$table_prefix}gallery_images GROUP BY image_album_id";
+		$result = $db->sql_query($sql);
+		while ($row = $db->sql_fetchrow($result)) {
+			$album_last_image[$row['image_album_id']] = $row;
+		}
+		$db->sql_freeresult($result);
 
-	$user_root_albums = array();
-	// We need to create a root album for each user
-	foreach ($users as $user_id => $nothing)
-	{
-		$album_id++;
-		$user_root_albums[$user_id] = array(
-			'album_id' => $album_id,
-			'parent_id' => 0,
-			'left_id' => 0,
-			'right_id' => 0,
-			'album_parents' => '',
-			'album_type' => 1,
-			'album_status' => 0,
-			'album_contest' => 0,
-			'album_name' => vb_get_user_name($user_id),
-			'album_desc' => vb_get_user_name($user_id) . "'s album",
-			'album_desc_options' => 7,
-			'album_desc_uid' => '',
-			'album_desc_bitfield' => '',
-			'album_user_id' => $user_id,
-			'album_images' => 0,
-			'album_images_real' => 0,
-			'album_last_image_id' => 0,
-			'album_image' => '',
-			'album_last_image_time' => 0,
-			'album_last_image_name' => '',
-			'album_last_username' => '',
-			'album_last_user_colour' => '',
-			'album_last_user_id' => 0,
-			'album_watermark' => 1,
-			'album_sort_key' => '',
-			'album_sort_dir' => '',
-			'display_in_rrc' => 0,
-			'display_on_index' => 0,
-			'display_subalbum_list' => 1,
-			'album_feed' => 1,
-			'album_auth_access' => 0,
-		);
-	}
+		$user_root_albums = array();
+		// We need to create a root album for each user
+		foreach ($users as $user_id => $nothing)
+		{
+			$album_id++;
+			$user_root_albums[$user_id] = array(
+				'album_id' => $album_id,
+				'parent_id' => 0,
+				'left_id' => 0,
+				'right_id' => 0,
+				'album_parents' => '',
+				'album_type' => 1,
+				'album_status' => 0,
+				'album_contest' => 0,
+				'album_name' => vb_get_user_name($user_id),
+				'album_desc' => vb_get_user_name($user_id) . "'s album",
+				'album_desc_options' => 7,
+				'album_desc_uid' => '',
+				'album_desc_bitfield' => '',
+				'album_user_id' => $user_id,
+				'album_images' => 0,
+				'album_images_real' => 0,
+				'album_last_image_id' => 0,
+				'album_image' => '',
+				'album_last_image_time' => 0,
+				'album_last_image_name' => '',
+				'album_last_username' => '',
+				'album_last_user_colour' => '',
+				'album_last_user_id' => 0,
+				'album_watermark' => 1,
+				'album_sort_key' => '',
+				'album_sort_dir' => '',
+				'display_in_rrc' => 0,
+				'display_on_index' => 0,
+				'display_subalbum_list' => 1,
+				'album_feed' => 1,
+				'album_auth_access' => 0,
+			);
+		}
 
-	// Build the whole list of albums starting from the existing ones
-	$albums = array();
-	foreach ($existing_albums as $album)
-	{
-		// Now we know the parent, we just created it
-		$album['parent_id'] = $user_root_albums[$album['album_user_id']]['album_id'];
-		$albums[$album['album_user_id']][$album['album_id']] = $album;
-	}
-	// Now add all the root albums (the user default albums)
-	foreach ($user_root_albums as $album)
-	{
-		$albums[$album['album_user_id']][$album['album_id']] = $album;
-	}
+		// Build the whole list of albums starting from the existing ones
+		$albums = array();
+		foreach ($existing_albums as $album)
+		{
+			// Now we know the parent, we just created it
+			$album['parent_id'] = $user_root_albums[$album['album_user_id']]['album_id'];
+			$albums[$album['album_user_id']][$album['album_id']] = $album;
+		}
+		// Now add all the root albums (the user default albums)
+		foreach ($user_root_albums as $album)
+		{
+			$albums[$album['album_user_id']][$album['album_id']] = $album;
+		}
 
-	foreach ($albums as $user_id => $user_albums)
-	{
-		vb_fix_user_albums($user_albums, $album_last_image);
+		foreach ($albums as $user_id => $user_albums)
+		{
+			vb_fix_user_albums($user_albums, $album_last_image);
+		}
 	}
 }
 
@@ -3389,20 +3401,43 @@ function vb_fix_image_comments()
 {
 	global $db, $phpbb_config_php_file;
 
-	$table_prefix = $phpbb_config_php_file->get('table_prefix');
-
-	$comments = array();
-	$sql = "SELECT comment_image_id, comment_id, max(comment_time) AS max, count(comment_id) AS count FROM {$table_prefix}gallery_comments GROUP BY comment_image_id";
-	$result = $db->sql_query($sql);
-	while ($row = $db->sql_fetchrow($result)) {
-		$comments[] = $row;
-	}
-	$db->sql_freeresult($result);
-	vb_conversion_log("vb_fix_image_comments(): " . count($comments) . " last comment(s) per picture loaded.");
-
-	foreach ($comments as $comment)
+	if (vb_is_convert_albums())
 	{
-		$sql = "UPDATE {$table_prefix}gallery_images SET image_comments={$comment['count']}, image_last_comment={$comment['comment_id']} WHERE image_id={$comment['comment_image_id']}";
-		$db->sql_query($sql);
+		$table_prefix = $phpbb_config_php_file->get('table_prefix');
+
+		$comments = array();
+		$sql = "SELECT comment_image_id, comment_id, max(comment_time) AS max, count(comment_id) AS count FROM {$table_prefix}gallery_comments GROUP BY comment_image_id";
+		$result = $db->sql_query($sql);
+		while ($row = $db->sql_fetchrow($result)) {
+			$comments[] = $row;
+		}
+		$db->sql_freeresult($result);
+		vb_conversion_log("vb_fix_image_comments(): " . count($comments) . " last comment(s) per picture loaded.");
+
+		foreach ($comments as $comment)
+		{
+			$sql = "UPDATE {$table_prefix}gallery_images SET image_comments={$comment['count']}, image_last_comment={$comment['comment_id']} WHERE image_id={$comment['comment_image_id']}";
+			$db->sql_query($sql);
+		}
 	}
+}
+
+/**
+ * Returns vBulletin version as a number
+ * 
+ * @staticvar type $vb_version
+ * @return int
+ */
+function vb_version()
+{
+	static $vb_version = null;
+	
+	if (is_null($vb_version))
+	{
+		$version_string = get_config_value('templateversion');
+		$version_string = str_replace('.', '', $version_string);
+		$vb_version = intval($version_string);
+		vb_conversion_log("vb_version(): vBulletin version {$vb_version} loaded.");
+	}
+	return $vb_version;
 }
