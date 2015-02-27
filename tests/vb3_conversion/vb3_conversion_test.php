@@ -13,11 +13,11 @@ class vb3_conversion_test extends phpbb_test_case
 	{
 		global $phpbb_root_path;
 
-		$this->assertTrue(is_file($phpbb_root_path . 'install/convertors/functions_vb37.php'));
-		$this->assertTrue(is_file($phpbb_root_path . 'install/convertors/convert_vb37.php'));
+		$this->assertTrue(is_file($phpbb_root_path . 'install/convertors/functions_vb3.php'));
+		$this->assertTrue(is_file($phpbb_root_path . 'install/convertors/convert_vb3.php'));
 		$this->assertTrue(is_file($phpbb_root_path . 'install/convertors/vb_conversion_constants.php'));
 		$this->assertTrue(is_file($phpbb_root_path . 'install/convertors/vbPermission.class.php'));
-		$this->assertTrue(is_file($phpbb_root_path . 'install/convertors/functions_vb37_permissions.php'));
+		$this->assertTrue(is_file($phpbb_root_path . 'install/convertors/functions_vb3_permissions.php'));
 		$this->assertTrue(is_file($phpbb_root_path . 'install/convertors/ConversionDataStore.php'));
 	}
 
@@ -29,7 +29,7 @@ class vb3_conversion_test extends phpbb_test_case
 	{
 		global $phpbb_root_path;
 
-		include_once $phpbb_root_path . 'install/convertors/functions_vb37.php';
+		include_once $phpbb_root_path . 'install/convertors/functions_vb3.php';
 		$this->assertTrue(function_exists('vb_user_id'));
 	}
 }

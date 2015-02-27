@@ -1,6 +1,6 @@
 <?php
 global $phpbb_root_path;
-include_once $phpbb_root_path . 'install/convertors/functions_vb37.php';
+include_once $phpbb_root_path . 'install/convertors/functions_vb3.php';
 
 /**
  *
