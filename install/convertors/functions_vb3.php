@@ -969,7 +969,11 @@ function vb_convert_default_groups() {
 		$dest_id = get_default_group_id_from_vb_name($row['title']);
 		// I'm not too sure these parameters are even used any more (I haven't found them in the admin console)
 		// Also reset all group colors
-		$sql = "UPDATE " . GROUPS_TABLE ." SET group_sig_chars = {$row['sigmaxchars']}, group_max_recipients = {$row['pmsendmax']}, group_colour = '' WHERE group_id = {$dest_id}";
+		$sql = "UPDATE " . GROUPS_TABLE ." SET ";
+		if (is_numeric($row['sigmaxchars'])) {
+			$sql .= "group_sig_chars = {$row['sigmaxchars']}, ";
+		}
+		$sql .= "group_max_recipients = {$row['pmsendmax']}, group_colour = '' WHERE group_id = {$dest_id}";
 		$db->sql_query($sql);
 	}
 }
