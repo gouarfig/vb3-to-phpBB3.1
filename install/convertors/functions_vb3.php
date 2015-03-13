@@ -54,7 +54,7 @@ function vb_conversion_log($logString, $logFile = 'vb_conversion_log.txt') {
 
 
 /**
-* Set forum flags - only prune old polls by default
+* Set forum flags
  */
 function vb_forum_flags()
 {
@@ -74,7 +74,7 @@ function vb_forum_flags()
 	$forum_flags += 0;
 
 	// FORUM_FLAG_ACTIVE_TOPICS
-	$forum_flags += 0;
+	$forum_flags += FORUM_FLAG_ACTIVE_TOPICS;
 
 	// FORUM_FLAG_POST_REVIEW
 	$forum_flags += FORUM_FLAG_POST_REVIEW;
@@ -423,10 +423,11 @@ function vb_convert_group_type($group_type) {
  * @global type $src_db
  * @global type $db
  * @global type $cache
+ * @global type $convert
  */
 function vb_add_bbcodes()
 {
-	global $src_db, $db, $cache;
+	global $src_db, $db, $cache, $convert;
 
 	$existing_bbcodes = array();
 	$new_bbcodes = array(
@@ -1335,6 +1336,36 @@ function vb_mimetype($mimetype)
 }
 
 /**
+ * Check that we can write into the different destination folders
+ */
+function vb_check_folders()
+{
+	global $config, $convert, $phpbb_root_path;
+
+	$attachments = $phpbb_root_path . $config['upload_path'];
+	if (!is_dir($attachments) || !is_writable($attachments)) {
+		$convert->p_master->error("Attachments path is not writeable: {$attachments}", __LINE__, __FILE__);
+		exit();
+	}
+	vb_conversion_log("vb_check_folders(): Attachments folder is '{$attachments}'");
+
+	$customavatars = $phpbb_root_path . $config['avatar_path'];
+	if (!is_dir($customavatars) || !is_writable($customavatars)) {
+		$convert->p_master->error("Custom avatars path is not writeable: {$customavatars}", __LINE__, __FILE__);
+		exit();
+	}
+	vb_conversion_log("vb_check_folders(): Custom avatars folder is '{$customavatars}'");
+
+	$customprofilepics = vb_get_customprofilepic_path();
+	vb_conversion_log("vb_check_folders(): Custom profile pictures folder is '{$customprofilepics}'");
+
+	$signaturepics = vb_get_signaturepic_path();
+	vb_conversion_log("vb_check_folders(): Signature pictures folder is '{$signaturepics}'");
+
+	vb_conversion_log("vb_check_folders(): All destination folders are writable.");
+}
+
+/**
  * Imports attachements
  *
  * @global type $config
@@ -1355,13 +1386,13 @@ function vb_import_attachment($userid)
 	if ( $convert->convertor['attach_loc'] == 2 )
 	{
 		$file=$convert->options['forum_path'].'/'.$convert->convertor['upload_path'].implode('/', preg_split('//', $userid,  -1, PREG_SPLIT_NO_EMPTY)).'/'.$attachid.'.attach';
-		copy($file,$attach_dir.'/'.$physical);
+		copy($file, $attach_dir.'/'.$physical);
 
 		if ( $convert->row['thumbnail_filesize'] )
 		{
 			$thumb_file = $convert->options['forum_path'].'/'.$convert->convertor['upload_path'].implode('/', preg_split('//', $userid,  -1, PREG_SPLIT_NO_EMPTY)).'/'.$attachid.'.thumb';
 			$thumb_physical = 'thumb_'.$physical;
-			copy($thumb_file,$attach_dir.'/'.$thumb_physical);
+			copy($thumb_file, $attach_dir.'/'.$thumb_physical);
 		}
 	}
 
@@ -1417,22 +1448,24 @@ function vb_import_customavatar()
 {
 	global $db, $src_db, $convert, $config, $phpbb_root_path;
 
+	$destination_path = $phpbb_root_path . $config['avatar_path'];
+	
 	// Avatars in files
 	if ( $convert->convertor['avatar_loc'] == 1 )
 	{
-		$sql = 'SELECT ca.userid AS ca_user_id, ca.width, ca.height, u.userid AS u_user_id, u.avatarrevision FROM ' . $convert->src_table_prefix . 'customavatar ca, ' . $convert->src_table_prefix . 'user u WHERE ca.userid = u.userid';
+		$sql = 'SELECT ca.userid AS ca_user_id, ca.filename, ca.width, ca.height, u.userid AS u_user_id, u.avatarrevision FROM ' . $convert->src_table_prefix . 'customavatar ca, ' . $convert->src_table_prefix . 'user u WHERE ca.userid = u.userid';
 		$result = $src_db->sql_query($sql);
 		while ($row = $src_db->sql_fetchrow($result))
 		{
 			$avatar_userid = vb_user_id($row['ca_user_id']);
-			$avatar_src = $convert->options['forum_path'].'/'.$convert->convertor['avatar_path'].'avatar'.$row['ca_user_id'].'_'.$row['avatarrevision'].'.gif';
-			$avatar_dest = $phpbb_root_path.'/'.$config['avatar_path'].'/'.$config['avatar_salt'].'_'.$avatar_userid.'.'.vb_file_ext($avatar_src);
+			$avatar_src = $convert->options['forum_path'] . '/' . $convert->convertor['avatar_path'] . 'avatar' . $row['ca_user_id'] . '_' . $row['avatarrevision'] . '.' . vb_file_ext($row['filename']);
+			$avatar_dest = $destination_path . '/' . $config['avatar_salt'] . '_' . $avatar_userid . '.' . vb_file_ext($avatar_src);
 			$user_avatar = $avatar_userid . '_' . time() . '.' . vb_file_ext($avatar_src);
 			$avatar_width = $row['width'];
 			$avatar_height = $row['height'];
 			// TODO: Check this value is still valid!
 			$avatar_type = AVATAR_UPLOAD;
-			copy($avatar_src,$avatar_dest);
+			copy($avatar_src, $avatar_dest);
 
 			$sql = 'UPDATE ' . USERS_TABLE . ' SET '
 					. 'user_avatar="' . $user_avatar . '",'
@@ -1455,7 +1488,7 @@ function vb_import_customavatar()
 			$avatar_data = $row['filedata'];
 			$avatar_userid = vb_user_id($row['userid']);
 
-			$avatar_dest = $phpbb_root_path.'/'.$config['avatar_path'].'/'.$config['avatar_salt'].'_'.$avatar_userid.'.'.vb_file_ext($avatar_src);
+			$avatar_dest = $destination_path . '/' . $config['avatar_salt'] . '_' . $avatar_userid . '.' . vb_file_ext($avatar_src);
 			$user_avatar = $avatar_userid . '_' . time() . '.' . vb_file_ext($avatar_src);
 			$avatar_width = $row['width'];
 			$avatar_height = $row['height'];
@@ -1480,23 +1513,11 @@ function vb_import_customavatar()
 	}
 }
 
-/**
- * Import the custome profile pictures. You will need a phpBB extension to deal with them.
- *
- * @global type $db
- * @global type $src_db
- * @global type $convert
- * @global type $config
- * @global type $phpbb_root_path
- * @param type $profilepics_path
- */
-function vb_import_customprofilepic($profilepics_path = null)
+function vb_get_customprofilepic_path()
 {
-	global $db, $src_db, $convert, $config, $phpbb_root_path;
+	global $convert, $config, $phpbb_root_path;
 
-	if (!is_null($profilepics_path)) {
-		$config['profilepics_path'] = $profilepics_path;
-	} else {
+	if (!isset($config['profilepics_path'])) {
 		$config['profilepics_path'] = 'images/profile_pics';
 	}
 	$destination_path = $phpbb_root_path;
@@ -1511,6 +1532,24 @@ function vb_import_customprofilepic($profilepics_path = null)
 		$convert->p_master->error("Custom profile pictures path is not writeable: {$destination_path}", __LINE__, __FILE__);
 		exit();
 	}
+	return $destination_path;
+}
+
+/**
+ * Import the custome profile pictures. You will need a phpBB extension to deal with them.
+ *
+ * @global type $db
+ * @global type $src_db
+ * @global type $convert
+ * @global type $config
+ * @global type $phpbb_root_path
+ * @param type $profilepics_path
+ */
+function vb_import_customprofilepic()
+{
+	global $db, $src_db, $convert, $config;
+
+	$destination_path = vb_get_customprofilepic_path();
 
 	$sql='SELECT * FROM '. $convert->src_table_prefix . 'customprofilepic';
 	$result = $src_db->sql_query($sql);
@@ -1539,6 +1578,28 @@ function vb_import_customprofilepic($profilepics_path = null)
 	$src_db->sql_freeresult($result);
 }
 
+function vb_get_signaturepic_path()
+{
+	global $convert, $config, $phpbb_root_path;
+
+	if (!isset($config['signaturepic_path'])) {
+		$config['signaturepic_path'] = 'images/signature_pics';
+	}
+	$destination_path = $phpbb_root_path;
+	if (substr($destination_path, -1) != '/') {
+		$destination_path .= '/';
+	}
+	$destination_path .= $config['signaturepic_path'];
+	if (!file_exists($destination_path)) {
+		mkdir($destination_path);
+	}
+	if (!is_writeable($destination_path)) {
+		$convert->p_master->error("Custom signature pictures path is not writeable: {$destination_path}", __LINE__, __FILE__);
+		exit();
+	}
+	return $destination_path;
+}
+
 /**
  * Imports the signature profile pictures. You will need to install a phpBB extension to deal with these.
  * @global type $db
@@ -1546,31 +1607,14 @@ function vb_import_customprofilepic($profilepics_path = null)
  * @global type $convert
  * @global type $config
  * @global type $phpbb_root_path
- * @param type $signaturepic_path
  */
-function vb_import_signaturepic($signaturepic_path = null)
+function vb_import_signaturepic()
 {
-	global $db, $src_db, $convert, $config, $phpbb_root_path;
+	global $db, $src_db, $convert, $config;
 
 	if (vb_version() >= 370)
 	{
-		if (!is_null($signaturepic_path)) {
-			$config['signaturepic_path'] = $signaturepic_path;
-		} else {
-			$config['signaturepic_path'] = 'images/signature_pics';
-		}
-		$destination_path = $phpbb_root_path;
-		if (substr($destination_path, -1) != '/') {
-			$destination_path .= '/';
-		}
-		$destination_path .= $config['signaturepic_path'];
-		if (!file_exists($destination_path)) {
-			mkdir($destination_path);
-		}
-		if (!is_writeable($destination_path)) {
-			$convert->p_master->error("Custom signature pictures path is not writeable: {$destination_path}", __LINE__, __FILE__);
-			exit();
-		}
+		$destination_path = vb_get_signaturepic_path();
 
 		$sql = 'SELECT * FROM '. $convert->src_table_prefix . 'sigpic';
 		$result = $src_db->sql_query($sql);
@@ -3428,14 +3472,14 @@ function vb_fix_image_comments()
 
 /**
  * Returns vBulletin version as a number
- * 
+ *
  * @staticvar type $vb_version
  * @return int
  */
 function vb_version()
 {
 	static $vb_version = null;
-	
+
 	if (is_null($vb_version))
 	{
 		$version_string = get_config_value('templateversion');

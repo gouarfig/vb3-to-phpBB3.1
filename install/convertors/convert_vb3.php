@@ -32,8 +32,8 @@ $dbms = $phpbb_config_php_file->convert_30_dbms_to_31($dbms);
 * used on the initial list of convertors and to populate the default settings
 */
 $convertor_data = array(
-	'forum_name'	=> 'vBulletin versions 3.5 & 3.7',
-	'version'		=> '1.0.0-RC8',
+	'forum_name'	=> 'vBulletin versions 3.7 & 3.8 (possibly 3.5)',
+	'version'		=> '1.0.0-RC9',
 	'phpbb_version'	=> '3.1.2',
 	'author'		=> '<a href="https://www.phpbb.com/community/memberlist.php?mode=viewprofile&u=1438256">FredQ</a>',
 	'dbms'			=> $dbms,
@@ -333,13 +333,13 @@ if (!$get_info)
 	@define('DEFAULT_AVATAR_X_CUSTOM', get_config_value('avatar_max_width'));
 	@define('DEFAULT_AVATAR_Y_CUSTOM', get_config_value('avatar_max_height'));
 
-	@define('VB_GROUP_GUESTS', "Unregistered / Not Logged In");
-	@define('VB_GROUP_AWAITING_EMAIL', "Users Awaiting Email Confirmation");
-	@define('VB_GROUP_AWAITING_MODERATION', "Users Awaiting Moderation");
-	@define('VB_GROUP_USERS', "Registered Users");
-	@define('VB_GROUP_MODERATORS', "Moderators");
-	@define('VB_GROUP_SUPER_MODERATORS', "Super Moderators");
-	@define('VB_GROUP_ADMINISTRATORS', "Administrators");
+	if (!defined('VB_GROUP_GUESTS')) define('VB_GROUP_GUESTS', "Unregistered / Not Logged In");
+	if (!defined('VB_GROUP_AWAITING_EMAIL')) define('VB_GROUP_AWAITING_EMAIL', "Users Awaiting Email Confirmation");
+	if (!defined('VB_GROUP_AWAITING_MODERATION')) define('VB_GROUP_AWAITING_MODERATION', "Users Awaiting Moderation");
+	if (!defined('VB_GROUP_USERS')) define('VB_GROUP_USERS', "Registered Users");
+	if (!defined('VB_GROUP_MODERATORS')) define('VB_GROUP_MODERATORS', "Moderators");
+	if (!defined('VB_GROUP_SUPER_MODERATORS')) define('VB_GROUP_SUPER_MODERATORS', "Super Moderators");
+	if (!defined('VB_GROUP_ADMINISTRATORS')) define('VB_GROUP_ADMINISTRATORS', "Administrators");
 
 /**
 *	Description on how to use the convertor framework.
@@ -844,6 +844,7 @@ if (!$get_info)
 
 		// This can't be an array for some reason
 		'execute_first'	=> '
+			vb_check_folders();
 			vb_clean_datastore();
 			add_default_groups();
 			vb_convert_default_groups();
