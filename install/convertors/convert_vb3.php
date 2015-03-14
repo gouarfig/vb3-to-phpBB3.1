@@ -32,8 +32,8 @@ $dbms = $phpbb_config_php_file->convert_30_dbms_to_31($dbms);
 * used on the initial list of convertors and to populate the default settings
 */
 $convertor_data = array(
-	'forum_name'	=> 'vBulletin versions 3.7 & 3.8 (possibly 3.5)',
-	'version'		=> '1.0.0-RC9',
+	'forum_name'	=> 'vBulletin versions 3.5, 3.7 & 3.8 (3.6 has not been tested)',
+	'version'		=> '1.0.0.15.3.13',
 	'phpbb_version'	=> '3.1.2',
 	'author'		=> '<a href="https://www.phpbb.com/community/memberlist.php?mode=viewprofile&u=1438256">FredQ</a>',
 	'dbms'			=> $dbms,
@@ -44,7 +44,12 @@ $convertor_data = array(
 	'dbname'		=> $dbname,
 	'table_prefix'	=> 'vb_',
 	'forum_path'	=> '../forums',
-	'author_notes'	=> 'Please refer to the <a href="https://www.phpbb.com/customise/db/converter/vbulletin_%283.7%29_to_phpbb_3.1.2/">phpBB forum</a> if you need more information about the convertor.',
+	'author_notes'	=> ""
+	. "<strong>Please read this note if your board is or has a default language different than English:</strong><br />\n"
+	. "<ul><li>It is advisable to install your languages in phpBB <strong>before</strong> starting the conversion</li><br />\n"
+	. "<li>If you want the default user groups to be mapped to the default phpBB user groups, you need to change the names of the groups in the file <i>convert_vb3_config.php</i><br />\n"
+	. "Just open the file <i>convert_vb3_config.php</i> and read all the information in there.<br /></li></ul><br />\n"
+	. "Please refer to the <a href='https://www.phpbb.com/customise/db/converter/vbulletin_%283.7%29_to_phpbb_3.1.2/'>phpBB forum</a> if you need more information about the conversion.<br />\n",
 );
 
 /**
@@ -301,38 +306,11 @@ $test_file = 'showthread.php';
 */
 if (!$get_info)
 {
-
-	$src_db->sql_return_on_error(false);
-
-	// Let us set a temporary config variable for user id incrementing
-	$sql = "SELECT userid
-		FROM {$convert->src_table_prefix}user
-		WHERE userid = 1";
-	$result = $src_db->sql_query($sql);
-	$user_id = (int) $src_db->sql_fetchfield('userid');
-	$src_db->sql_freeresult($result);
-
-	// If there is a user id 1, we need to increment user ids. :/
-	if ($user_id === 1)
-	{
-		// Try to get the maximum user id possible...
-		$sql = "SELECT MAX(userid) AS max_user_id
-			FROM {$convert->src_table_prefix}user";
-		$result = $src_db->sql_query($sql);
-		$user_id = (int) $src_db->sql_fetchfield('max_user_id');
-		$src_db->sql_freeresult($result);
-
-		set_config('increment_user_id', ($user_id + 1), true);
-	}
-	else
-	{
-		set_config('increment_user_id', 0, true);
-	}
-
 	// Overwrite maximum avatar width/height
 	@define('DEFAULT_AVATAR_X_CUSTOM', get_config_value('avatar_max_width'));
 	@define('DEFAULT_AVATAR_Y_CUSTOM', get_config_value('avatar_max_height'));
 
+	// Default group names in English if they haven't been set already
 	if (!defined('VB_GROUP_GUESTS')) define('VB_GROUP_GUESTS', "Unregistered / Not Logged In");
 	if (!defined('VB_GROUP_AWAITING_EMAIL')) define('VB_GROUP_AWAITING_EMAIL', "Users Awaiting Email Confirmation");
 	if (!defined('VB_GROUP_AWAITING_MODERATION')) define('VB_GROUP_AWAITING_MODERATION', "Users Awaiting Moderation");
@@ -472,8 +450,7 @@ if (!$get_info)
 
 		'album_dataloc'			=> get_config_value('album_dataloc'),
 
-		// Don't change this without knowing what you're doing: you're probably going to brake the converter
-		'default_language_code' => 'en',
+		'default_language_code' => get_vb3_default_language_code(),
 
 		// We'll be trying to map vBulletin default groups to phpBB default groups
 		// Please note this is based on an English version of vBulletin only, and assuming you haven't changed the default names.
@@ -1346,7 +1323,7 @@ if (!$get_info)
 			),
 
 			array(
-				'target'		=> (defined('CONVERT_ALBUMS') && (CONVERT_ALBUMS == 1)) ? $table_prefix . 'gallery_albums' : '',
+				'target'		=> (vb_is_convert_albums()) ? $table_prefix . 'gallery_albums' : '',
 				'primary'		=> 'album.albumid',
 				'execute_first'	=>
 								'vb_create_gallery_tables();'
@@ -1385,11 +1362,12 @@ if (!$get_info)
 				array('album_feed',					1,							''),
 				array('album_auth_access',			'album.state',				'vb_album_auth_access'),
 
-				'where'		=> 'album.userid IN (SELECT userid FROM user)',
+				// The conversion framework doesn't allow 'INNER JOIN'
+				'where'		=> 'album.userid=user.userid',
 			),
 
 			array(
-				'target'		=> (defined('CONVERT_ALBUMS') && (CONVERT_ALBUMS == 1)) ? $table_prefix . 'gallery_images' : '',
+				'target'		=> (vb_is_convert_albums()) ? $table_prefix . 'gallery_images' : '',
 				'primary'		=> 'albumpicture.pictureid',
 				'query_first'	=> array('target', $convert->truncate_statement . $table_prefix . 'gallery_images'),
 
@@ -1429,11 +1407,12 @@ if (!$get_info)
 				'left_join'		=> array(
 					'albumpicture LEFT JOIN picture ON albumpicture.pictureid=picture.pictureid',
 				),
-				'where'		=> 'picture.userid IN (SELECT userid FROM user)',
+				// The conversion framework doesn't allow 'INNER JOIN'
+				'where'		=> 'picture.userid=user.userid',
 			),
 
 			array(
-				'target'		=> (defined('CONVERT_ALBUMS') && (CONVERT_ALBUMS == 1)) ? $table_prefix . 'gallery_comments' : '',
+				'target'		=> (vb_is_convert_albums()) ? $table_prefix . 'gallery_comments' : '',
 				'primary'		=> 'picturecomment.commentid',
 				'query_first'	=> array('target', $convert->truncate_statement . $table_prefix . 'gallery_comments'),
 
@@ -1452,7 +1431,7 @@ if (!$get_info)
 				array('comment_edit_count',		0,									''),
 				array('comment_edit_user_id',	0,									''),
 
-				'where'			=> "picturecomment.state='visible' AND picturecomment.postuserid IN (SELECT userid FROM user) AND picturecomment.pictureid IN (SELECT pictureid FROM picture)",
+				'where'			=> "picturecomment.state='visible' AND picturecomment.postuserid=user.userid AND picturecomment.pictureid=picture.pictureid",
 			),
 		),
 	);

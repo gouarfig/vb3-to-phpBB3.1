@@ -154,6 +154,8 @@ function vb_convert_forums() {
 
 	vb_conversion_log('vb_convert_forums(): ' . count($forums) . ' forum(s) found');
 
+	$forums = vb_clean_orphaned_forums($forums);
+
 	// Build the hierarchy from the root
 	vb_build_hierarchy($forums, $hierarchy);
 
@@ -172,6 +174,27 @@ function vb_convert_forums() {
 	sort($forums_nokey);
 
 	$db->sql_multi_insert(FORUMS_TABLE, $forums_nokey);
+}
+
+/**
+ * In some installation, a parent can be deleted and all the children will still point to it.
+ * This function is cleaning these by moving the orphaned forums to the root
+ *
+ * @return array
+ */
+function vb_clean_orphaned_forums($forums)
+{
+	$checked_forums = array();
+	foreach ($forums as $forum_id => $forum)
+	{
+		if (!isset($forums[$forum['parent_id']]))
+		{
+			$forum['parent_id'] = 0;
+			vb_conversion_log("vb_clean_orphaned_forums(): WARNING - Moving orphaned forum id {$forum['forum_id']} to the root");
+		}
+		$checked_forums[$forum_id] = $forum;
+	}
+	return $checked_forums;
 }
 
 /**
@@ -228,17 +251,139 @@ function vb_build_left_right_id(&$forums, &$children, &$left_id, $field_name = '
 	return $right_id;
 }
 
+function get_vb3_default_language_code()
+{
+	static $language_code;
+
+	if (empty($language_code))
+	{
+		// The default will be English if nothing else is found
+		$language_code = 'en';
+
+		$language_id = get_config_value('languageid');
+		if (!empty($language_id))
+		{
+			global $convert, $src_db;
+
+			$sql = "SELECT languagecode
+				FROM {$convert->src_table_prefix}language
+				WHERE languageid = $language_id";
+			$result = $src_db->sql_query($sql);
+			$temp = $src_db->sql_fetchfield('languagecode');
+			$src_db->sql_freeresult($result);
+
+			if (!empty($temp))
+			{
+				$language_code = $temp;
+			}
+		}
+		vb_conversion_log("get_vb3_default_language_code(): Default language is set to '$language_code'");
+	}
+	return $language_code;
+}
+
+/**
+ * Returns the vBulletin encoding for the selected language (either ID or CODE)
+ * If none provided, will return the default charset.
+ *
+ * @param type $language_id
+ * @param type $language_code
+ * @return string
+ */
+function get_vb3_encoding($language_id = 0, $language_code = '')
+{
+	global $convert, $src_db;
+
+	if (empty($language_id) && empty($language_code))
+	{
+		$language_id = get_config_value('languageid');
+	}
+	$sql = "SELECT charset FROM {$convert->src_table_prefix}language WHERE ";
+	if (!empty($language_id))
+	{
+		$sql .= "languageid=$language_id";
+	}
+	elseif (!empty($language_code))
+	{
+		$sql .= "languagecode='$language_code'";
+	}
+	$result = $src_db->sql_query($sql);
+	$charset = $src_db->sql_fetchfield('charset');
+	$src_db->sql_freeresult($result);
+
+	// There's no charset? I don't think it should happen. Anyway, let's keep going with what is likely be the default one
+	if (empty($charset))
+	{
+		$charset = 'ISO-8859-1';
+		vb_conversion_log("WARNING: No charset found for language_id=$language_id; language_code='$language_code'");
+	}
+	return $charset;
+}
+
+/**
+ * Returns user configured language. Returns 0 if the user has the default language
+ *
+ * @global type $convert
+ * @global type $convert_row
+ * @global type $src_db
+ * @global type $same_db
+ * @return int
+ */
+function vb_get_user_lang_id()
+{
+	global $convert, $convert_row;
+
+	$lang_id = 0;
+	if (!empty($convert_row))
+	{
+		if (!empty($convert_row['poster_id']))
+		{
+			global $src_db, $same_db;
+
+			if ($convert->mysql_convert && $same_db)
+			{
+				$src_db->sql_query("SET NAMES 'binary'");
+			}
+
+			$sql = "SELECT languageid FROM {$convert->src_table_prefix}user WHERE userid = " . (int) $convert_row['poster_id'];
+			$result = $src_db->sql_query($sql);
+			$lang_id = (int) $src_db->sql_fetchfield('languageid');
+			$src_db->sql_freeresult($result);
+
+			if ($convert->mysql_convert && $same_db)
+			{
+				$src_db->sql_query("SET NAMES 'utf8'");
+			}
+		}
+	}
+	return $lang_id;
+}
 
 /**
 * Function for recoding text with the default language
 *
 * @param string $text text to recode to utf8
-* @param bool $grab_user_lang -- not used
+* @param bool $grab_user_lang
 */
 function vb_set_encoding($text, $grab_user_lang = true)
 {
-	// In vb3 the default charset is ISO-8859-1
-	return utf8_recode($text, 'ISO-8859-1');
+	static $default_vb_charset = '';
+	$vb_charset = '';
+
+	if ($grab_user_lang)
+	{
+		$vb_charset = get_vb3_encoding(vb_get_user_lang_id());
+	}
+	else
+	{
+		if (empty($default_vb_charset))
+		{
+			$default_vb_charset = get_vb3_encoding();
+		}
+		$vb_charset = $default_vb_charset;
+	}
+
+	return utf8_recode($text, $vb_charset);
 }
 
 /**
@@ -282,49 +427,37 @@ function vb_user_id($user_id)
 	// Increment user id if the old forum is having a user with the id 1
 	if (!isset($config['increment_user_id']))
 	{
-		global $src_db, $same_db, $convert;
+		global $src_db, $convert;
 
-		if ($convert->mysql_convert && $same_db)
-		{
-			$src_db->sql_query("SET NAMES 'binary'");
-		}
-
-		// Now let us set a temporary config variable for user id incrementing
-		$sql = "SELECT user_id
-			FROM {$convert->src_table_prefix}users
-			WHERE user_id = 1";
+		// Let us set a temporary config variable for user id incrementing
+		$sql = "SELECT userid
+			FROM {$convert->src_table_prefix}user
+			WHERE userid = 1";
 		$result = $src_db->sql_query($sql);
-		$id = (int) $src_db->sql_fetchfield('user_id');
+		$user_id = (int) $src_db->sql_fetchfield('userid');
 		$src_db->sql_freeresult($result);
-
-		// Try to get the maximum user id possible...
-		$sql = "SELECT MAX(user_id) AS max_user_id
-			FROM {$convert->src_table_prefix}users";
-		$result = $src_db->sql_query($sql);
-		$max_id = (int) $src_db->sql_fetchfield('max_user_id');
-		$src_db->sql_freeresult($result);
-
-		if ($convert->mysql_convert && $same_db)
-		{
-			$src_db->sql_query("SET NAMES 'utf8'");
-		}
 
 		// If there is a user id 1, we need to increment user ids. :/
-		if ($id === 1)
+		if ($user_id === 1)
 		{
-			set_config('increment_user_id', ($max_id + 1), true);
-			$config['increment_user_id'] = $max_id + 1;
+			// Try to get the maximum user id possible...
+			$sql = "SELECT MAX(userid) AS max_user_id
+				FROM {$convert->src_table_prefix}user";
+			$result = $src_db->sql_query($sql);
+			$user_id = (int) $src_db->sql_fetchfield('max_user_id');
+			$src_db->sql_freeresult($result);
+
+			set_config('increment_user_id', ($user_id + 1), true);
 		}
 		else
 		{
 			set_config('increment_user_id', 0, true);
-			$config['increment_user_id'] = 0;
 		}
 	}
 
 	if (!empty($config['increment_user_id']) && $user_id == 1)
 	{
-		return $config['increment_user_id'];
+		$user_id = $config['increment_user_id'];
 	}
 
 	// Manual conversion of users id (you shouldn't need that)
@@ -335,11 +468,6 @@ function vb_user_id($user_id)
 			$user_id = $vb_user_id_conversion[$user_id];
 		}
 	}
-
-	// A user id of 0 can happen, for example within the ban table if no user is banned...
-	// Within the posts and topics table this can be "dangerous" but is the fault of the user
-	// having mods installed (a poster id of 0 is not possible in 2.0.x).
-	// Therefore, we return the user id "as is".
 
 	return (int) $user_id;
 }
@@ -1011,7 +1139,7 @@ function vb_convert_group_id($src_group_id) {
 }
 
 /**
- * Returns the default language code
+ * If the user doesn't have a configured language, returns the board default one
  *
  * @global type $config
  * @param string $src_lang
@@ -1449,7 +1577,7 @@ function vb_import_customavatar()
 	global $db, $src_db, $convert, $config, $phpbb_root_path;
 
 	$destination_path = $phpbb_root_path . $config['avatar_path'];
-	
+
 	// Avatars in files
 	if ( $convert->convertor['avatar_loc'] == 1 )
 	{
@@ -3262,6 +3390,25 @@ function vb_create_gallery_file_system()
 			@mkdir($phpbbgallery_core_file_mini, 0755, true);
 			@mkdir($phpbbgallery_core_file_source, 0755, true);
 		}
+
+		if (!is_dir($phpbbgallery_core_file) || !is_writable($phpbbgallery_core_file)) {
+			$convert->p_master->error("Album gallery path is not writeable: {$phpbbgallery_core_file}", __LINE__, __FILE__);
+			exit();
+		}
+		vb_conversion_log("vb_create_gallery_file_system(): phpbbgallery folder is '{$phpbbgallery_core_file}'");
+
+		if (!is_dir($phpbbgallery_core_file_medium) || !is_writable($phpbbgallery_core_file_medium)) {
+			$convert->p_master->error("Album gallery path is not writeable: {$phpbbgallery_core_file_medium}", __LINE__, __FILE__);
+			exit();
+		}
+		if (!is_dir($phpbbgallery_core_file_mini) || !is_writable($phpbbgallery_core_file_mini)) {
+			$convert->p_master->error("Album gallery path is not writeable: {$phpbbgallery_core_file_mini}", __LINE__, __FILE__);
+			exit();
+		}
+		if (!is_dir($phpbbgallery_core_file_source) || !is_writable($phpbbgallery_core_file_source)) {
+			$convert->p_master->error("Album gallery path is not writeable: {$phpbbgallery_core_file_source}", __LINE__, __FILE__);
+			exit();
+		}
 	}
 }
 
@@ -3485,7 +3632,7 @@ function vb_version()
 		$version_string = get_config_value('templateversion');
 		$version_string = str_replace('.', '', $version_string);
 		$vb_version = intval($version_string);
-		vb_conversion_log("vb_version(): vBulletin version {$vb_version} loaded.");
+		vb_conversion_log("vb_version(): vBulletin version {$vb_version} found.");
 	}
 	return $vb_version;
 }
