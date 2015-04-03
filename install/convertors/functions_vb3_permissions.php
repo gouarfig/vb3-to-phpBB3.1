@@ -93,12 +93,16 @@ function vb_get_roles()
 	return $roles;
 }
 
-function &vb_get_forums_defaults()
+function &vb_get_forums_defaults($hidden_forums)
 {
 	global $src_db, $convert;
 
 	$forums_defaults = array();
-	$sql = "SELECT forumid,title AS forumtitle,options FROM {$convert->src_table_prefix}forum ORDER BY forumid";
+	$sql = "SELECT forumid,title AS forumtitle,options FROM {$convert->src_table_prefix}forum";
+	if (!empty($hidden_forums) && is_array($hidden_forums)) {
+		$sql .= " WHERE forumid NOT IN (" . implode(', ', $hidden_forums) . ")";
+	}
+	$sql .= " ORDER BY forumid";
 	$result = $src_db->sql_query($sql);
 	while ($row = $src_db->sql_fetchrow($result)) {
 		$forums_defaults[$row['forumid']] = $row;
@@ -132,7 +136,7 @@ function &vb_get_usergroups_defaults($ignore_groups = array())
 	return $usergroups_defaults;
 }
 
-function &vb_get_forums_permissions($ignore_groups = array())
+function &vb_get_forums_permissions($ignore_groups = array(), $ignore_forums = array())
 {
 	global $src_db, $convert;
 
@@ -141,8 +145,11 @@ function &vb_get_forums_permissions($ignore_groups = array())
 			. " FROM {$convert->src_table_prefix}forumpermission fp"
 			. " INNER JOIN {$convert->src_table_prefix}forum f ON fp.forumid = f.forumid"
 			. " INNER JOIN {$convert->src_table_prefix}usergroup ug ON fp.usergroupid = ug.usergroupid";
-	if (!empty($ignore_groups)) {
+	if (!empty($ignore_groups) && is_array($ignore_groups)) {
 		$sql .= " WHERE ug.title NOT IN ('" . implode("','", $ignore_groups). "')";
+	}
+	if (!empty($ignore_forums) && is_array($ignore_forums)) {
+		$sql .= " AND fp.forumid NOT IN (" . implode(', ', $ignore_forums) . ")";
 	}
 	$sql .= " ORDER BY fp.forumid,fp.usergroupid";
 	$result = $src_db->sql_query($sql);
@@ -415,10 +422,11 @@ function vb_convert_forum_permissions()
 	$dst_permissions = Array();
 	$datastore = new ConversionDataStore();
 	$forums = $datastore->getData('forums');
+	$hidden_forums = $datastore->getData('hidden_forums');
 	$roles = vb_get_roles();
 
 	// 1- Get forum defaults
-	$forums_defaults = vb_get_forums_defaults();
+	$forums_defaults = vb_get_forums_defaults($hidden_forums);
 
 	// 2- Get usergroup defaults
 	$usergroups_defaults = vb_get_usergroups_defaults($convert->convertor['ignore_groups']);
@@ -427,7 +435,7 @@ function vb_convert_forum_permissions()
 	$forums_per_usergroups_defaults = vb_build_forums_per_usergroups_defaults($forums_defaults, $usergroups_defaults);
 
 	// 4- Build the specific permissions: forums / usergroups
-	$forums_per_usergroups_permissions = vb_get_forums_permissions($convert->convertor['ignore_groups']);
+	$forums_per_usergroups_permissions = vb_get_forums_permissions($convert->convertor['ignore_groups'], $hidden_forums);
 
 	// 5- Build the permissions inheritance
 	vb_build_permissions_inheritance($forums, $forums_per_usergroups_permissions);
