@@ -191,7 +191,7 @@ function vb_clean_orphaned_forums(&$forums)
 	$checked_forums = array();
 	foreach ($forums as $forum_id => $forum)
 	{
-		if (!isset($forums[$forum['parent_id']]))
+		if (($forum['parent_id'] > 0) && !isset($forums[$forum['parent_id']]))
 		{
 			$forum['parent_id'] = 0;
 			$forums_to_hide[] = $forum['forum_id'];
@@ -1737,7 +1737,7 @@ function vb_set_moved_id($pollid)
 function vb_clean_datastore()
 {
 	$datastore = ConversionDataStore::getInstance();
-	$datastore->purge();
+	$datastore->clean();
 }
 
 /**
