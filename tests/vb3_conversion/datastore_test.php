@@ -71,6 +71,16 @@ class datastore_test extends phpbb_test_case
 	/**
 	 * @depends test_purge
 	 */
+	public function test_flush()
+	{
+		$datastore = ConversionDataStore::getInstance();
+		$datastore->flush();
+		$this->assertFileExists('_context.data');
+	}
+
+	/**
+	 * @depends test_flush
+	 */
 	public function test_clean()
 	{
 		$datastore = ConversionDataStore::getInstance();
