@@ -162,7 +162,7 @@ function vb_convert_forums() {
 	vb_build_left_right_id($forums, $hierarchy, $left_id);
 
 	// We save the hierarchy for later use (forum permissions)
-	$datastore = new ConversionDataStore();
+	$datastore = ConversionDataStore::getInstance();
 	$datastore->clearData('forums');
 	$datastore->setData('forums', $active_forums);
 	unset($datastore);
@@ -207,7 +207,7 @@ function vb_clean_orphaned_forums(&$forums)
 	}
 	if (!empty($forums_to_hide))
 	{
-		$datastore = new ConversionDataStore();
+		$datastore = ConversionDataStore::getInstance();
 		$datastore->setData('hidden_forums', $forums_to_hide);
 		unset($datastore);
 	}
@@ -381,7 +381,7 @@ function get_vb3_mysql_encoding()
 {
 	global $convert, $src_db;
 	static $force_encoding = null;
-	
+
 	if ($convert->mysql_convert) {
 		if (is_null($force_encoding)) {
 			$force_encoding = false;
@@ -408,7 +408,7 @@ function get_vb3_mysql_encoding()
 
 /**
  * Returns the mysql table/field encoding from the source database
- * 
+ *
  * @staticvar array $table_encoding
  * @param type $table_name
  * @return string
@@ -417,44 +417,49 @@ function get_src_db_table_encoding($table_name)
 {
 	global $convert;
 	static $table_encoding = array();
-	
+
 	if (!is_null($table_name))
 	{
 		$table_name = source_table_name($table_name);
-		
+
 		if (empty($table_encoding)) {
-			$encoding_count = array();
-			$src_db = get_src_db_object();
-			$db_name = $src_db->dbname;
-			$sql = "SELECT "
-					. "T.table_name, "
-					. "CCSA.character_set_name "
-					. "FROM "
-					. "information_schema.`TABLES` T, "
-					. "information_schema.`COLLATION_CHARACTER_SET_APPLICABILITY` CCSA "
-					. "WHERE "
-					. "CCSA.collation_name = T.table_collation "
-					. "AND "
-					. "T.table_schema = '{$db_name}' ";
-			$result = $src_db->sql_query($sql);
-			while ($row = $src_db->sql_fetchrow($result)) {
-				$table_encoding[$row['table_name']] = $row['character_set_name'];
-				if (!isset($encoding_count[$row['character_set_name']]))
-				{
-					$encoding_count[$row['character_set_name']] = 1;
+			$datastore = ConversionDataStore::getInstance();
+			$table_encoding = $datastore->getData('table_encoding');
+			if (empty($table_encoding)) {
+				$encoding_count = array();
+				$src_db = get_src_db_object();
+				$db_name = $src_db->dbname;
+				$sql = "SELECT "
+						. "T.table_name, "
+						. "CCSA.character_set_name "
+						. "FROM "
+						. "information_schema.`TABLES` T, "
+						. "information_schema.`COLLATION_CHARACTER_SET_APPLICABILITY` CCSA "
+						. "WHERE "
+						. "CCSA.collation_name = T.table_collation "
+						. "AND "
+						. "T.table_schema = '{$db_name}' ";
+				$result = $src_db->sql_query($sql);
+				while ($row = $src_db->sql_fetchrow($result)) {
+					$table_encoding[$row['table_name']] = $row['character_set_name'];
+					if (!isset($encoding_count[$row['character_set_name']]))
+					{
+						$encoding_count[$row['character_set_name']] = 1;
+					}
+					else
+					{
+						$encoding_count[$row['character_set_name']]++;
+					}
 				}
-				else
+				vb_conversion_log("get_src_db_table_encoding(): " . count($table_encoding) . " table encoding loaded.");
+				if (!empty($encoding_count))
 				{
-					$encoding_count[$row['character_set_name']]++;
+					foreach($encoding_count as $encoding => $count)
+					{
+						vb_conversion_log("get_src_db_table_encoding(): {$count} tables are using the character set '{$encoding}'.");
+					}
 				}
-			}
-			vb_conversion_log("get_src_db_table_encoding(): " . count($table_encoding) . " table encoding loaded.");
-			if (!empty($encoding_count))
-			{
-				foreach($encoding_count as $encoding => $count)
-				{
-					vb_conversion_log("get_src_db_table_encoding(): {$count} tables are using the character set '{$encoding}'.");
-				}
+				$datastore->setData('table_encoding', $table_encoding);
 			}
 		}
 		return $table_encoding[$table_name];
@@ -467,7 +472,7 @@ function get_src_db_table_encoding($table_name)
 
 /**
  * Makes sure the source database table name has the prefix in front of it.
- * 
+ *
  * @global type $convert
  * @param string $table_name
  * @return string
@@ -475,7 +480,7 @@ function get_src_db_table_encoding($table_name)
 function source_table_name($table_name)
 {
 	global $convert;
-	
+
 	if (substr($table_name, 0, strlen($convert->src_table_prefix)) != $convert->src_table_prefix)
 	{
 		$table_name = $convert->src_table_prefix . $table_name;
@@ -487,7 +492,7 @@ function get_current_mysql_src_db_encoding()
 {
 	global $src_db, $convert;
 	static $encoding = null;
-	
+
 	if (is_null($encoding) && $convert->mysql_convert) {
 		$sql = "SELECT @@character_set_client, @@character_set_connection, @@character_set_results";
 		$result = $src_db->sql_query($sql);
@@ -502,7 +507,7 @@ function get_current_mysql_src_db_encoding()
 /**
  * Returns the source (board to be converted) database object from the globals.
  * If the source and destination are on the same server, it also deals with character charset
- * 
+ *
  * @global type $src_db
  * @global type $convert
  * @global bool $same_db
@@ -512,7 +517,7 @@ function get_current_mysql_src_db_encoding()
 function get_src_db_object($with_encoding = null)
 {
 	global $src_db, $convert, $same_db;
-	
+
 	if ($convert->mysql_convert)
 	{
 		if (!is_null($with_encoding))
@@ -531,7 +536,7 @@ function get_src_db_object($with_encoding = null)
 /**
  * Returns the phpBB database object from the globals
  * If the source and destination are on the same server, it also deals with character charset
- * 
+ *
  * @global type $db
  * @global type $convert
  * @global bool $same_db
@@ -540,7 +545,7 @@ function get_src_db_object($with_encoding = null)
 function get_db_object()
 {
 	global $db, $convert, $same_db;
-	
+
 	if ($convert->mysql_convert && $same_db)
 	{
 		$db->sql_query("SET NAMES 'utf8'");
@@ -585,7 +590,7 @@ function vb_set_default_encoding($text)
 
 /**
  * Re-encode the $text in UTF-8 using the source encoding for $table and $field
- * 
+ *
  * @param type $text
  * @param type $table
  * @param type $field
@@ -594,7 +599,7 @@ function vb_set_default_encoding($text)
 function vb_set_encoding_from_source($text, $table = null, $field = null)
 {
 	$source_encoding = '';
-	
+
 	if (is_null($table))
 	{
 		$table = get_table_name_from_convert_global();
@@ -625,20 +630,20 @@ function vb_set_encoding_from_setting($text)
 
 /**
  * Returns the source table name being processed
- * 
+ *
  * @global type $convert
  * @return string
  */
 function get_table_name_from_convert_global()
 {
 	global $convert;
-	
+
 	return $convert->src_table_prefix . $convert->convertor['current_table_name'];
 }
 
 function store_latest_encoding($encoding)
 {
-	$datastore = new ConversionDataStore();
+	$datastore = ConversionDataStore::getInstance();
 	$datastore->setData('latest_encoding', $encoding);
 	unset($datastore);
 }
@@ -646,7 +651,7 @@ function store_latest_encoding($encoding)
 function use_latest_encoding()
 {
 	$encoding = null;
-	$datastore = new ConversionDataStore();
+	$datastore = ConversionDataStore::getInstance();
 	$encoding = $datastore->getData('latest_encoding');
 	unset($datastore);
 	return $encoding;
@@ -817,7 +822,7 @@ function vb_add_bbcodes()
 	global $cache, $convert;
 
 	$src_db = get_src_db_object();
-	
+
 	$existing_bbcodes = array();
 	$new_bbcodes = array(
 			'font=' => array(
@@ -875,7 +880,7 @@ function vb_add_bbcodes()
 	while ($row = $src_db->sql_fetchrow($result)) {
 		$tag = trim(strtolower($row['bbcodetag']), '=');
 		$row['bbcodeexplanation'] = vb_set_encoding_from_source($row['bbcodeexplanation'], 'bbcode', 'bbcodeexplanation');
-		
+
 		if (!isset($new_bbcodes[$tag])) {
 			if ($row['twoparams'] == 0) {
 				$new_bbcodes[$tag] = array(
@@ -1147,7 +1152,7 @@ function vb_prepare_message($message)
 
 	// Tell the parser not to complain if a message is too big
 	$config['max_post_chars'] = 0;
-	
+
 	$message_parser->parse($enable_bbcode, $enable_magic_url, $enable_smilies);
 
 	if (sizeof($message_parser->warn_msg))
@@ -1731,7 +1736,7 @@ function vb_set_moved_id($pollid)
  */
 function vb_clean_datastore()
 {
-	$datastore = new ConversionDataStore();
+	$datastore = ConversionDataStore::getInstance();
 	$datastore->purge();
 }
 
@@ -2202,7 +2207,7 @@ function vb_convert_pm_folders()
 	$db->sql_multi_insert(PRIVMSGS_FOLDER_TABLE, $folders);
 	vb_conversion_log('vb_convert_pm_folder(): ' . count($folders) . ' PM folder(s) found');
 
-	$datastore = new ConversionDataStore();
+	$datastore = ConversionDataStore::getInstance();
 	$datastore->clearData('pmfolders');
 	$datastore->setData('pmfolders', $rows);
 }
@@ -2233,7 +2238,7 @@ function vb_folder_id($folder_id)
 		$vb_folder_id = PRIVMSGS_INBOX;
 
 	} elseif ($folder_id > 0) {
-		$datastore = new ConversionDataStore();
+		$datastore = ConversionDataStore::getInstance();
 		$folders = $datastore->getData('pmfolders');
 
 		if (isset($folders[$convert->row['poster_id']]['folders'][$folder_id])) {
@@ -2476,7 +2481,7 @@ function vb_profile_field_show_on_reg($profilefield)
 function vb_build_field_name($profilefield)
 {
 	static $number = null;
-	
+
 	$field_name = strtolower($profilefield['title']);
 	//$field_name = preg_replace('/[^a-z0-9 _]+/u', '', $field_name);
 	// Only letters and _ are allowed in a name
@@ -2964,7 +2969,7 @@ function vb_import_icons()
 	}
 	$db->sql_multi_insert(ICONS_TABLE, $inserts);
 
-	$ds = new ConversionDataStore();
+	$ds = ConversionDataStore::getInstance();
 	$ds->setData('icon_conversion', $icon_conversion);
 	unset($ds);
 }
@@ -2980,7 +2985,7 @@ function vb_icon_id($source_id)
 	static $icon_conversion = array();
 
 	if (empty($icon_conversion)) {
-		$ds = new ConversionDataStore();
+		$ds = ConversionDataStore::getInstance();
 		$icon_conversion = $ds->getData('icon_conversion');
 		unset($ds);
 	}
@@ -3965,7 +3970,7 @@ function vb_version()
 
 	if (is_null($vb_version))
 	{
-		$datastore = new ConversionDataStore();
+		$datastore = ConversionDataStore::getInstance();
 		$vb_version = $datastore->getData('vb_version');
 		if (empty($vb_version))
 		{

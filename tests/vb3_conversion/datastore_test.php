@@ -15,7 +15,7 @@ class datastore_test extends phpbb_test_case
 
 	public function test_empty_getData()
 	{
-		$datastore = new ConversionDataStore();
+		$datastore = ConversionDataStore::getInstance();
 		$this->assertEmpty($datastore->getData('no_data'));
 		unset($datastore);
 	}
@@ -25,7 +25,7 @@ class datastore_test extends phpbb_test_case
 	 */
 	public function test_setter_and_getter()
 	{
-		$datastore = new ConversionDataStore();
+		$datastore = ConversionDataStore::getInstance();
 		$datastore->setData('First name', $this->myfirstname);
 		$datastore->setData('Surname', $this->mysurname);
 
@@ -39,7 +39,7 @@ class datastore_test extends phpbb_test_case
 	 */
 	public function test_data_was_saved()
 	{
-		$datastore = new ConversionDataStore();
+		$datastore = ConversionDataStore::getInstance();
 		$this->assertEmpty($datastore->getData('no_data'));
 		$this->assertEquals($this->myfirstname, $datastore->getData('First name'));
 		$this->assertEquals($this->mysurname, $datastore->getData('Surname'));
@@ -51,7 +51,7 @@ class datastore_test extends phpbb_test_case
 	 */
 	public function test_clearData()
 	{
-		$datastore = new ConversionDataStore();
+		$datastore = ConversionDataStore::getInstance();
 		$datastore->clearData('First name');
 		$this->assertEmpty($datastore->getData('First name'));
 		unset($datastore);
@@ -62,7 +62,7 @@ class datastore_test extends phpbb_test_case
 	 */
 	public function test_purge()
 	{
-		$datastore = new ConversionDataStore();
+		$datastore = ConversionDataStore::getInstance();
 		$datastore->purge();
 		$this->assertEmpty($datastore->getData('Surname'));
 		unset($datastore);
@@ -73,7 +73,7 @@ class datastore_test extends phpbb_test_case
 	 */
 	public function test_clean()
 	{
-		$datastore = new ConversionDataStore();
+		$datastore = ConversionDataStore::getInstance();
 		$this->assertFileExists('_context.data');
 		$datastore->clean();
 		unset($datastore);
