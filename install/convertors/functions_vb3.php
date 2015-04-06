@@ -3192,17 +3192,21 @@ function vb_convert_censorwords()
 	{
 		foreach ($words as $word)
 		{
-			if ((substr($word, 0, 1) == '{') && (substr($word, -1) == '}')) {
-				$word = substr($word, 1, strlen($word) -2);
-				$replacement = str_repeat($character, strlen($word));
-			} else {
-				$replacement = str_repeat($character, strlen($word));
-				$word = '*' . $word . '*';
+			$word = trim($word);
+			if (!empty($word))
+			{
+				if ((substr($word, 0, 1) == '{') && (substr($word, -1) == '}')) {
+					$word = substr($word, 1, strlen($word) -2);
+					$replacement = str_repeat($character, strlen($word));
+				} else {
+					$replacement = str_repeat($character, strlen($word));
+					$word = '*' . $word . '*';
+				}
+				$censorwords[] = array(
+					'word' => vb_set_encoding_from_source($word, 'setting', 'value'),
+					'replacement' => vb_set_encoding_from_source($replacement, 'setting', 'value'),
+				);
 			}
-			$censorwords[] = array(
-				'word' => vb_set_encoding_from_source($word, 'setting', 'value'),
-				'replacement' => vb_set_encoding_from_source($replacement, 'setting', 'value'),
-			);
 		}
 	}
 	if (!empty($censorwords)) {

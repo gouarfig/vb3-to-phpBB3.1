@@ -33,7 +33,7 @@ $dbms = $phpbb_config_php_file->convert_30_dbms_to_31($dbms);
 */
 $convertor_data = array(
 	'forum_name'	=> 'vBulletin versions 3.5, 3.7 & 3.8 (3.6 has not been tested)',
-	'version'		=> '1.0.0.15.4.4',
+	'version'		=> '1.0.0.15.4.5',
 	'phpbb_version'	=> '3.1.2',
 	'author'		=> '<a href="https://www.phpbb.com/community/memberlist.php?mode=viewprofile&u=1438256">FredQ</a>',
 	'dbms'			=> $dbms,
@@ -938,7 +938,8 @@ if (!$get_info)
 				'execute_first'	=> '$convert->convertor["current_table_name"] = "ranks";',
 
 				array('rank_id',					'ranks.rankid',				''),
-				array('rank_title',					'ranks.rankimg',			array('function1' => 'vb_set_encoding_from_source', 'function2' => 'utf8_htmlspecialchars')),
+				//array('rank_title',					'ranks.rankimg',			array('function1' => 'vb_set_encoding_from_source', 'function2' => 'utf8_htmlspecialchars')),
+				array('rank_title',					'ranks.rankimg',			array('function1' => 'vb_set_encoding_from_source', 'function2' => 'strip_tags')),
 				array('rank_min',					'ranks.minposts',			array('typecast' => 'int')),
 				array('rank_special',				0,							''),
 				array('rank_image',					'',							''),
