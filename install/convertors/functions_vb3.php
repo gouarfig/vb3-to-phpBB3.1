@@ -90,14 +90,13 @@ function vb_forum_flags()
  * @global type $convert
  */
 function vb_convert_forums() {
-	global $db, $src_db, $convert;
+	global $convert;
 
 	define('BITFIELD_ALLOWPOSTING', 2);
 	define('BITFIELD_CANCONTAINTHREADS', 4);
 	define('BITFIELD_ALLOWICONS', 1024);
 
-	$db->sql_query($convert->truncate_statement . FORUMS_TABLE);
-
+	$src_db = get_src_db_object();
 	$forums = Array();
 	$hierarchy = Array();
 	$sql = 'SELECT * FROM ' . $convert->src_table_prefix . 'forum ORDER BY displayorder';
@@ -107,10 +106,10 @@ function vb_convert_forums() {
 		$new_forum = array(
 			//'display_order'				=> $row['displayorder'],
 			'forum_id'					=> (int) $row['forumid'],
-			'forum_name'				=> htmlspecialchars(vb_set_default_encoding($row['title']), ENT_COMPAT, 'UTF-8'),
+			'forum_name'				=> htmlspecialchars(vb_set_encoding_from_source($row['title'], 'forum', 'title'), ENT_COMPAT, 'UTF-8'),
 			'parent_id'					=> ($row['parentid'] < 0) ? 0 : $row['parentid'],
 			'forum_parents'				=> '',
-			'forum_desc'				=> htmlspecialchars(vb_set_default_encoding($row['description']), ENT_COMPAT, 'UTF-8'),
+			'forum_desc'				=> htmlspecialchars(vb_set_encoding_from_source($row['description'], 'forum', 'description'), ENT_COMPAT, 'UTF-8'),
 			'forum_type'				=> ($row['options'] & BITFIELD_CANCONTAINTHREADS) ? FORUM_POST : FORUM_CAT,
 			'forum_status'				=> ($row['options'] & BITFIELD_ALLOWPOSTING) ? ITEM_UNLOCKED : ITEM_LOCKED,
 			'forum_flags'				=> vb_forum_flags(),
@@ -154,6 +153,8 @@ function vb_convert_forums() {
 
 	vb_conversion_log('vb_convert_forums(): ' . count($forums) . ' forum(s) found');
 
+	$active_forums = vb_clean_orphaned_forums($forums);
+
 	// Build the hierarchy from the root
 	vb_build_hierarchy($forums, $hierarchy);
 
@@ -161,9 +162,10 @@ function vb_convert_forums() {
 	vb_build_left_right_id($forums, $hierarchy, $left_id);
 
 	// We save the hierarchy for later use (forum permissions)
-	$datastore = new ConversionDataStore();
+	$datastore = ConversionDataStore::getInstance();
 	$datastore->clearData('forums');
-	$datastore->setData('forums', $forums);
+	$datastore->setData('forums', $active_forums);
+	unset($datastore);
 
 	// Make a copy now
 	$forums_nokey = $forums;
@@ -171,7 +173,46 @@ function vb_convert_forums() {
 	// We have to remove keys on $forums, because multi_insert is expecting an item in [0]
 	sort($forums_nokey);
 
+	$db = get_db_object();
+	$db->sql_query($convert->truncate_statement . FORUMS_TABLE);
 	$db->sql_multi_insert(FORUMS_TABLE, $forums_nokey);
+}
+
+/**
+ * In some installation, a parent can be deleted and all the children will still point to it.
+ * This function is cleaning these by moving the orphaned forums to the root
+ *
+ * @return array
+ */
+function vb_clean_orphaned_forums(&$forums)
+{
+	$forums_to_hide = array();
+	$active_forums = array();
+	$checked_forums = array();
+	foreach ($forums as $forum_id => $forum)
+	{
+		if (($forum['parent_id'] > 0) && !isset($forums[$forum['parent_id']]))
+		{
+			$forum['parent_id'] = 0;
+			$forums_to_hide[] = $forum['forum_id'];
+			vb_conversion_log("vb_clean_orphaned_forums(): WARNING - Moving orphaned forum id {$forum['forum_id']} to the root");
+		}
+		else
+		{
+			// In this array we only copy the active forums
+			$active_forums[$forum_id] = $forum;
+		}
+		// This array will contain all forums, with the orphaned ones moved to the root
+		$checked_forums[$forum_id] = $forum;
+	}
+	if (!empty($forums_to_hide))
+	{
+		$datastore = ConversionDataStore::getInstance();
+		$datastore->setData('hidden_forums', $forums_to_hide);
+		unset($datastore);
+	}
+	$forums = $checked_forums;
+	return $active_forums;
 }
 
 /**
@@ -228,17 +269,315 @@ function vb_build_left_right_id(&$forums, &$children, &$left_id, $field_name = '
 	return $right_id;
 }
 
+function get_vb3_default_language_code()
+{
+	static $language_code;
+
+	if (empty($language_code))
+	{
+		// The default will be English if nothing else is found
+		$language_code = 'en';
+
+		$language_id = get_config_value('languageid');
+		if (!empty($language_id))
+		{
+			global $convert, $src_db;
+
+			$sql = "SELECT languagecode
+				FROM {$convert->src_table_prefix}language
+				WHERE languageid = $language_id";
+			$result = $src_db->sql_query($sql);
+			$temp = $src_db->sql_fetchfield('languagecode');
+			$src_db->sql_freeresult($result);
+
+			if (!empty($temp))
+			{
+				$language_code = $temp;
+			}
+		}
+		vb_conversion_log("get_vb3_default_language_code(): Default language is set to '$language_code'");
+	}
+	return $language_code;
+}
+
+/**
+ * Returns the vBulletin encoding for the selected language (either ID or CODE)
+ * If none provided, will return the default charset.
+ *
+ * @param type $language_id
+ * @param type $language_code
+ * @return string
+ */
+function get_vb3_encoding($language_id = 0, $language_code = '')
+{
+	global $convert, $src_db;
+
+	if (empty($language_id) && empty($language_code))
+	{
+		$language_id = get_config_value('languageid');
+	}
+	$sql = "SELECT charset FROM {$convert->src_table_prefix}language WHERE ";
+	if (!empty($language_id))
+	{
+		$sql .= "languageid=$language_id";
+	}
+	elseif (!empty($language_code))
+	{
+		$sql .= "languagecode='$language_code'";
+	}
+	$result = $src_db->sql_query($sql);
+	$charset = $src_db->sql_fetchfield('charset');
+	$src_db->sql_freeresult($result);
+
+	// There's no charset? I don't think it should happen. Anyway, let's keep going with what is likely be the default one
+	if (empty($charset))
+	{
+		$charset = 'ISO-8859-1';
+		vb_conversion_log("WARNING: No charset found for language_id=$language_id; language_code='$language_code'");
+	}
+	return $charset;
+}
+
+/**
+ * Returns user configured language. Returns 0 if the user has the default language
+ *
+ * @global type $convert
+ * @global type $convert_row
+ * @global type $src_db
+ * @global type $same_db
+ * @return int
+ */
+function vb_get_user_lang_id()
+{
+	global $convert, $convert_row;
+
+	$lang_id = 0;
+	if (!empty($convert_row))
+	{
+		if (!empty($convert_row['poster_id']))
+		{
+			global $src_db, $same_db;
+
+			if ($convert->mysql_convert && $same_db)
+			{
+				$src_db->sql_query("SET NAMES 'binary'");
+			}
+
+			$sql = "SELECT languageid FROM {$convert->src_table_prefix}user WHERE userid = " . (int) $convert_row['poster_id'];
+			$result = $src_db->sql_query($sql);
+			$lang_id = (int) $src_db->sql_fetchfield('languageid');
+			$src_db->sql_freeresult($result);
+
+			if ($convert->mysql_convert && $same_db)
+			{
+				$src_db->sql_query("SET NAMES 'utf8'");
+			}
+		}
+	}
+	return $lang_id;
+}
+
+function get_vb3_mysql_encoding()
+{
+	global $convert, $src_db;
+	static $force_encoding = null;
+
+	if ($convert->mysql_convert) {
+		if (is_null($force_encoding)) {
+			$force_encoding = false;
+			if (isset($convert->convertor_data['forum_path'])) {
+				$filename = '../' . $convert->convertor_data['forum_path'] . '/includes/config.php';
+				if (is_file($filename)) {
+					include $filename;
+					if (isset($config['Mysqli']['charset'])) {
+						$force_encoding = $config['Mysqli']['charset'];
+					}
+				}
+			}
+			if (!empty($force_encoding))
+			{
+				vb_conversion_log("get_vb3_mysql_encoding(): Mysql charset encoding forced to '{$force_encoding}'");
+			}
+		}
+		if (empty($force_encoding))
+		{
+		}
+	}
+	return $encoding;
+}
+
+/**
+ * Returns the mysql table/field encoding from the source database
+ *
+ * @staticvar array $table_encoding
+ * @param type $table_name
+ * @return string
+ */
+function get_src_db_table_encoding($table_name)
+{
+	global $convert;
+	static $table_encoding = array();
+
+	if (!is_null($table_name))
+	{
+		$table_name = source_table_name($table_name);
+
+		if (empty($table_encoding)) {
+			$datastore = ConversionDataStore::getInstance();
+			$table_encoding = $datastore->getData('table_encoding');
+			if (empty($table_encoding)) {
+				$encoding_count = array();
+				$src_db = get_src_db_object();
+				$db_name = $src_db->dbname;
+				$sql = "SELECT "
+						. "T.table_name, "
+						. "CCSA.character_set_name "
+						. "FROM "
+						. "information_schema.`TABLES` T, "
+						. "information_schema.`COLLATION_CHARACTER_SET_APPLICABILITY` CCSA "
+						. "WHERE "
+						. "CCSA.collation_name = T.table_collation "
+						. "AND "
+						. "T.table_schema = '{$db_name}' ";
+				$result = $src_db->sql_query($sql);
+				while ($row = $src_db->sql_fetchrow($result)) {
+					$table_encoding[$row['table_name']] = $row['character_set_name'];
+					if (!isset($encoding_count[$row['character_set_name']]))
+					{
+						$encoding_count[$row['character_set_name']] = 1;
+					}
+					else
+					{
+						$encoding_count[$row['character_set_name']]++;
+					}
+				}
+				vb_conversion_log("get_src_db_table_encoding(): " . count($table_encoding) . " table encoding loaded.");
+				if (!empty($encoding_count))
+				{
+					foreach($encoding_count as $encoding => $count)
+					{
+						vb_conversion_log("get_src_db_table_encoding(): {$count} tables are using the character set '{$encoding}'.");
+					}
+				}
+				$datastore->setData('table_encoding', $table_encoding);
+			}
+		}
+		return $table_encoding[$table_name];
+	}
+	else
+	{
+		return null;
+	}
+}
+
+/**
+ * Makes sure the source database table name has the prefix in front of it.
+ *
+ * @global type $convert
+ * @param string $table_name
+ * @return string
+ */
+function source_table_name($table_name)
+{
+	global $convert;
+
+	if (substr($table_name, 0, strlen($convert->src_table_prefix)) != $convert->src_table_prefix)
+	{
+		$table_name = $convert->src_table_prefix . $table_name;
+	}
+	return $table_name;
+}
+
+function get_current_mysql_src_db_encoding()
+{
+	global $src_db, $convert;
+	static $encoding = null;
+
+	if (is_null($encoding) && $convert->mysql_convert) {
+		$sql = "SELECT @@character_set_client, @@character_set_connection, @@character_set_results";
+		$result = $src_db->sql_query($sql);
+		if (!($row = $src_db->sql_fetchrow($result))) {
+			vb_conversion_log("get_current_mysql_src_db_encoding(): Mysql charset encoding: character_set_client='{$row['@@character_set_client']}', character_set_connection='{$row['@@character_set_connection']}', character_set_results='{$row['@@character_set_results']}'");
+			$encoding = $row['@@character_set_results'];
+		}
+	}
+	return $encoding;
+}
+
+/**
+ * Returns the source (board to be converted) database object from the globals.
+ * If the source and destination are on the same server, it also deals with character charset
+ *
+ * @global type $src_db
+ * @global type $convert
+ * @global bool $same_db
+ * @param string $with_encoding
+ * @return db object
+ */
+function get_src_db_object($with_encoding = null)
+{
+	global $src_db, $convert, $same_db;
+
+	if ($convert->mysql_convert)
+	{
+		if (!is_null($with_encoding))
+		{
+			$src_db->sql_query("SET NAMES '{$with_encoding}'");
+		}
+		else if ($same_db)
+		{
+			// I don't know why it's done like that, but it's everywhere in the converter backend
+			$src_db->sql_query("SET NAMES 'binary'");
+		}
+	}
+	return $src_db;
+}
+
+/**
+ * Returns the phpBB database object from the globals
+ * If the source and destination are on the same server, it also deals with character charset
+ *
+ * @global type $db
+ * @global type $convert
+ * @global bool $same_db
+ * @return db object
+ */
+function get_db_object()
+{
+	global $db, $convert, $same_db;
+
+	if ($convert->mysql_convert && $same_db)
+	{
+		$db->sql_query("SET NAMES 'utf8'");
+	}
+	return $db;
+}
 
 /**
 * Function for recoding text with the default language
 *
 * @param string $text text to recode to utf8
-* @param bool $grab_user_lang -- not used
+* @param bool $grab_user_lang
 */
 function vb_set_encoding($text, $grab_user_lang = true)
 {
-	// In vb3 the default charset is ISO-8859-1
-	return utf8_recode($text, 'ISO-8859-1');
+	static $default_vb_charset = '';
+	$vb_charset = '';
+
+	if ($grab_user_lang)
+	{
+		$vb_charset = get_vb3_encoding(vb_get_user_lang_id());
+	}
+	else
+	{
+		if (empty($default_vb_charset))
+		{
+			$default_vb_charset = get_vb3_encoding();
+		}
+		$vb_charset = $default_vb_charset;
+	}
+
+	return utf8_recode($text, $vb_charset);
 }
 
 /**
@@ -247,6 +586,75 @@ function vb_set_encoding($text, $grab_user_lang = true)
 function vb_set_default_encoding($text)
 {
 	return vb_set_encoding($text, false);
+}
+
+/**
+ * Re-encode the $text in UTF-8 using the source encoding for $table and $field
+ *
+ * @param type $text
+ * @param type $table
+ * @param type $field
+ * @return text
+ */
+function vb_set_encoding_from_source($text, $table = null, $field = null)
+{
+	$source_encoding = '';
+
+	if (is_null($table))
+	{
+		$table = get_table_name_from_convert_global();
+	}
+	if (!empty($table))
+	{
+		$source_encoding = get_src_db_table_encoding($table);
+	}
+	if (!empty($source_encoding))
+	{
+		store_latest_encoding($source_encoding);
+	}
+	else
+	{
+		$source_encoding = use_latest_encoding();
+	}
+	if (empty($source_encoding))
+	{
+		vb_conversion_log("vb_set_encoding_from_source(): WARNING: Encoding for table '{$table}' was not found!");
+	}
+	return utf8_recode($text, $source_encoding);
+}
+
+function vb_set_encoding_from_setting($text)
+{
+	return vb_set_encoding_from_source($text, 'setting', 'value');
+}
+
+/**
+ * Returns the source table name being processed
+ *
+ * @global type $convert
+ * @return string
+ */
+function get_table_name_from_convert_global()
+{
+	global $convert;
+
+	return $convert->src_table_prefix . $convert->convertor['current_table_name'];
+}
+
+function store_latest_encoding($encoding)
+{
+	$datastore = ConversionDataStore::getInstance();
+	$datastore->setData('latest_encoding', $encoding);
+	unset($datastore);
+}
+
+function use_latest_encoding()
+{
+	$encoding = null;
+	$datastore = ConversionDataStore::getInstance();
+	$encoding = $datastore->getData('latest_encoding');
+	unset($datastore);
+	return $encoding;
 }
 
 /**
@@ -282,49 +690,37 @@ function vb_user_id($user_id)
 	// Increment user id if the old forum is having a user with the id 1
 	if (!isset($config['increment_user_id']))
 	{
-		global $src_db, $same_db, $convert;
+		global $src_db, $convert;
 
-		if ($convert->mysql_convert && $same_db)
-		{
-			$src_db->sql_query("SET NAMES 'binary'");
-		}
-
-		// Now let us set a temporary config variable for user id incrementing
-		$sql = "SELECT user_id
-			FROM {$convert->src_table_prefix}users
-			WHERE user_id = 1";
+		// Let us set a temporary config variable for user id incrementing
+		$sql = "SELECT userid
+			FROM {$convert->src_table_prefix}user
+			WHERE userid = 1";
 		$result = $src_db->sql_query($sql);
-		$id = (int) $src_db->sql_fetchfield('user_id');
+		$user_id = (int) $src_db->sql_fetchfield('userid');
 		$src_db->sql_freeresult($result);
-
-		// Try to get the maximum user id possible...
-		$sql = "SELECT MAX(user_id) AS max_user_id
-			FROM {$convert->src_table_prefix}users";
-		$result = $src_db->sql_query($sql);
-		$max_id = (int) $src_db->sql_fetchfield('max_user_id');
-		$src_db->sql_freeresult($result);
-
-		if ($convert->mysql_convert && $same_db)
-		{
-			$src_db->sql_query("SET NAMES 'utf8'");
-		}
 
 		// If there is a user id 1, we need to increment user ids. :/
-		if ($id === 1)
+		if ($user_id === 1)
 		{
-			set_config('increment_user_id', ($max_id + 1), true);
-			$config['increment_user_id'] = $max_id + 1;
+			// Try to get the maximum user id possible...
+			$sql = "SELECT MAX(userid) AS max_user_id
+				FROM {$convert->src_table_prefix}user";
+			$result = $src_db->sql_query($sql);
+			$user_id = (int) $src_db->sql_fetchfield('max_user_id');
+			$src_db->sql_freeresult($result);
+
+			set_config('increment_user_id', ($user_id + 1), true);
 		}
 		else
 		{
 			set_config('increment_user_id', 0, true);
-			$config['increment_user_id'] = 0;
 		}
 	}
 
 	if (!empty($config['increment_user_id']) && $user_id == 1)
 	{
-		return $config['increment_user_id'];
+		$user_id = $config['increment_user_id'];
 	}
 
 	// Manual conversion of users id (you shouldn't need that)
@@ -335,11 +731,6 @@ function vb_user_id($user_id)
 			$user_id = $vb_user_id_conversion[$user_id];
 		}
 	}
-
-	// A user id of 0 can happen, for example within the ban table if no user is banned...
-	// Within the posts and topics table this can be "dangerous" but is the fault of the user
-	// having mods installed (a poster id of 0 is not possible in 2.0.x).
-	// Therefore, we return the user id "as is".
 
 	return (int) $user_id;
 }
@@ -393,12 +784,13 @@ function vb_convert_group_name($group_name)
 		'BOTS',
 	);
 
+	$group_name = strip_tags($group_name);
 	if (in_array(strtoupper($group_name), $default_groups))
 	{
 		$group_name = 'Converted - ' . $group_name;
 	}
 
-	return vb_set_default_encoding($group_name);
+	return strip_tags(vb_set_encoding_from_source($group_name, 'usergroup'));
 }
 
 /**
@@ -427,7 +819,9 @@ function vb_convert_group_type($group_type) {
  */
 function vb_add_bbcodes()
 {
-	global $src_db, $db, $cache, $convert;
+	global $cache, $convert;
+
+	$src_db = get_src_db_object();
 
 	$existing_bbcodes = array();
 	$new_bbcodes = array(
@@ -485,6 +879,8 @@ function vb_add_bbcodes()
 	$result = $src_db->sql_query($sql);
 	while ($row = $src_db->sql_fetchrow($result)) {
 		$tag = trim(strtolower($row['bbcodetag']), '=');
+		$row['bbcodeexplanation'] = vb_set_encoding_from_source($row['bbcodeexplanation'], 'bbcode', 'bbcodeexplanation');
+
 		if (!isset($new_bbcodes[$tag])) {
 			if ($row['twoparams'] == 0) {
 				$new_bbcodes[$tag] = array(
@@ -515,6 +911,7 @@ function vb_add_bbcodes()
 	}
 	$src_db->sql_freeresult($result);
 
+	$db = get_db_object();
 	$sql = 'SELECT bbcode_tag FROM ' . BBCODES_TABLE;
 	$result = $db->sql_query($sql);
 	while ($record = $db->sql_fetchrow($result)) {
@@ -605,12 +1002,19 @@ function get_smilies_array()
 */
 function vb_prepare_message($message)
 {
-	global $convert, $user, $convert_row, $message_parser;
+	global $config, $convert, $user, $convert_row, $message_parser;
 
 	if (!$message)
 	{
 		$convert->row['mp_bbcode_bitfield'] = $convert_row['mp_bbcode_bitfield'] = 0;
 		return '';
+	}
+
+	// make the post UTF-8
+	$message = vb_set_encoding_from_source($message);
+	if (function_exists('mb_internal_encoding'))
+	{
+		mb_internal_encoding("UTF-8");
 	}
 
 	// Convert vBulletin BBcode to phpBB BBcode using the configuration
@@ -630,23 +1034,28 @@ function vb_prepare_message($message)
 				$convert_bbcode = substr($temp, 0, $pos2);
 				$convert_parameter = substr($temp, $pos2 +1);
 			}
-			//vb_conversion_log("vb_prepare_message(): BBcode {$bbcode}/{$parameter} converted to {$convert_bbcode}/{$convert_parameter}");
 			if (!$parameter && !$convert_parameter) {
 				// The ? in (.*?) is important, it's asking the pattern to be lazy (match the closest instead of including the most you can)
-				$message = preg_replace("#\[{$bbcode}=(.*?)\](.*?)\[/{$bbcode}\]#si", "[{$convert_bbcode}=\\1]\\2[/{$convert_bbcode}]", $message);
-				$message = preg_replace("#\[{$bbcode}=(.*?)\](.*?)\[/{$bbcode}\]#s", "[{$convert_bbcode}=\\1]\\2[/{$convert_bbcode}]", $message);
+				$message = preg_replace("#\[{$bbcode}=(.*?)\](.*?)\[/{$bbcode}\]#siu", "[{$convert_bbcode}=\\1]\\2[/{$convert_bbcode}]", $message);
+				//if (empty($message)) {
+				//	vb_conversion_log("vb_prepare_message(): Error converting BBCode '{$vb_bbcode}' on the first pass.");
+				//}
+				//$message = preg_replace("#\[{$bbcode}=(.*?)\](.*?)\[/{$bbcode}\]#su", "[{$convert_bbcode}=\\1]\\2[/{$convert_bbcode}]", $message);
+				//if (empty($message)) {
+				//	vb_conversion_log("vb_prepare_message(): Error converting BBCode '{$vb_bbcode}' on the second pass.");
+				//}
 			} elseif (!$parameter && $convert_parameter) {
 				// The ? in (.*?) is important, it's asking the pattern to be lazy (match the closest instead of including the most you can)
-				$message = preg_replace("#\[{$bbcode}=(.*?)\](.*?)\[/{$bbcode}\]#si", "[{$convert_bbcode}={$convert_parameter}]\\2[/{$convert_bbcode}]", $message);
-				$message = preg_replace("#\[{$bbcode}=(.*?)\](.*?)\[/{$bbcode}\]#s", "[{$convert_bbcode}={$convert_parameter}]\\2[/{$convert_bbcode}]", $message);
+				$message = preg_replace("#\[{$bbcode}=(.*?)\](.*?)\[/{$bbcode}\]#siu", "[{$convert_bbcode}={$convert_parameter}]\\2[/{$convert_bbcode}]", $message);
+				//$message = preg_replace("#\[{$bbcode}=(.*?)\](.*?)\[/{$bbcode}\]#su", "[{$convert_bbcode}={$convert_parameter}]\\2[/{$convert_bbcode}]", $message);
 			} elseif ($parameter && $convert_parameter) {
 				// The ? in (.*?) is important, it's asking the pattern to be lazy (match the closest instead of including the most you can)
-				$message = preg_replace("#\[{$bbcode}={$parameter}\](.*?)\[/{$bbcode}\]#si", "[{$convert_bbcode}={$convert_parameter}]\\1[/{$convert_bbcode}]", $message);
-				$message = preg_replace("#\[{$bbcode}={$parameter}\](.*?)\[/{$bbcode}\]#s", "[{$convert_bbcode}={$convert_parameter}]\\1[/{$convert_bbcode}]", $message);
+				$message = preg_replace("#\[{$bbcode}={$parameter}\](.*?)\[/{$bbcode}\]#siu", "[{$convert_bbcode}={$convert_parameter}]\\1[/{$convert_bbcode}]", $message);
+				//$message = preg_replace("#\[{$bbcode}={$parameter}\](.*?)\[/{$bbcode}\]#su", "[{$convert_bbcode}={$convert_parameter}]\\1[/{$convert_bbcode}]", $message);
 			} elseif ($parameter && !$convert_parameter) {
 				// The ? in (.*?) is important, it's asking the pattern to be lazy (match the closest instead of including the most you can)
-				$message = preg_replace("#\[{$bbcode}={$parameter}\](.*?)\[/{$bbcode}\]#si", "[{$convert_bbcode}]\\1[/{$convert_bbcode}]", $message);
-				$message = preg_replace("#\[{$bbcode}={$parameter}\](.*?)\[/{$bbcode}\]#s", "[{$convert_bbcode}]\\1[/{$convert_bbcode}]", $message);
+				$message = preg_replace("#\[{$bbcode}={$parameter}\](.*?)\[/{$bbcode}\]#siu", "[{$convert_bbcode}]\\1[/{$convert_bbcode}]", $message);
+				//$message = preg_replace("#\[{$bbcode}={$parameter}\](.*?)\[/{$bbcode}\]#su", "[{$convert_bbcode}]\\1[/{$convert_bbcode}]", $message);
 			}
 		} else {
 			$pos2 = strpos($convert_bbcode, '=');
@@ -657,23 +1066,27 @@ function vb_prepare_message($message)
 				$convert_parameter = substr($temp, $pos2 +1);
 
 				// The ? in (.*?) is important, it's asking the pattern to be lazy (match the closest instead of including the most you can)
-				$message = preg_replace("#\[{$bbcode}\](.*?)\[/{$bbcode}\]#si", "[{$convert_bbcode}={$convert_parameter}]\\1[/{$convert_bbcode}]", $message);
-				$message = preg_replace("#\[{$bbcode}\](.*?)\[/{$bbcode}\]#s", "[{$convert_bbcode}={$convert_parameter}]\\1[/{$convert_bbcode}]", $message);
+				$message = preg_replace("#\[{$bbcode}\](.*?)\[/{$bbcode}\]#siu", "[{$convert_bbcode}={$convert_parameter}]\\1[/{$convert_bbcode}]", $message);
+				//$message = preg_replace("#\[{$bbcode}\](.*?)\[/{$bbcode}\]#su", "[{$convert_bbcode}={$convert_parameter}]\\1[/{$convert_bbcode}]", $message);
 			} else {
 				// The ? in (.*?) is important, it's asking the pattern to be lazy (match the closest instead of including the most you can)
-				$message = preg_replace("#\[{$bbcode}\](.*?)\[/{$bbcode}\]#si", "[{$convert_bbcode}]\\1[/{$convert_bbcode}]", $message);
-				$message = preg_replace("#\[{$bbcode}\](.*?)\[/{$bbcode}\]#s", "[{$convert_bbcode}]\\1[/{$convert_bbcode}]", $message);
+				$message = preg_replace("#\[{$bbcode}\](.*?)\[/{$bbcode}\]#siu", "[{$convert_bbcode}]\\1[/{$convert_bbcode}]", $message);
+				//$message = preg_replace("#\[{$bbcode}\](.*?)\[/{$bbcode}\]#su", "[{$convert_bbcode}]\\1[/{$convert_bbcode}]", $message);
 			}
+		}
+		if (empty($message)) {
+			vb_conversion_log("vb_prepare_message(): Error converting BBCode '{$vb_bbcode}'");
+			break;
 		}
 	}
 
 	if (strpos($message, '[size=') !== false)
 	{
 		// Remove quotes if there
-		$message = preg_replace('/\[size="(\d*?)"\]/s', '[size=\1]', $message);
+		$message = preg_replace('/\[size="(\d*?)"\]/su', '[size=\1]', $message);
 
 		$message = preg_replace_callback(
-				'/\[size=(\d*?)\]/',
+				'/\[size=(\d*?)\]/u',
 				function ($matches) {
 					$percent = vb_convert_font_size(intval($matches[1]));
 					return "[size={$percent}]";
@@ -685,20 +1098,20 @@ function vb_prepare_message($message)
 		if (strpos($message, "[{$bbcode}=") !== false)
 		{
 			// Remove quotes if there
-			$message = preg_replace('/\[' . $bbcode . '="(.*?)"\]/s', '[' . $bbcode . '=\1]', $message);
+			$message = preg_replace('/\[' . $bbcode . '="(.*?)"\]/su', '[' . $bbcode . '=\1]', $message);
 		}
 	}
 
 	if (strpos($message, '[quote=') !== false)
 	{
 		// vBulletin keeps an id after the name
-		$message = preg_replace('/\[quote=(.*?);(\d+)\]/s', '[quote=&quot;\1&quot;]', $message);
+		$message = preg_replace('/\[quote=(.*?);(\d+)\]/su', '[quote=&quot;\1&quot;]', $message);
 
 		// Add quotes if not there yet
-		$message = preg_replace('/\[quote=([^"]*?)\]/s', '[quote=&quot;\1&quot;]', $message);
+		$message = preg_replace('/\[quote=([^"]*?)\]/su', '[quote=&quot;\1&quot;]', $message);
 
-		$message = preg_replace('/\[quote="(.*?)"\]/s', '[quote=&quot;\1&quot;]', $message);
-		$message = preg_replace('/\[quote=\\\"(.*?)\\\"\]/s', '[quote=&quot;\1&quot;]', $message);
+		$message = preg_replace('/\[quote="(.*?)"\]/su', '[quote=&quot;\1&quot;]', $message);
+		$message = preg_replace('/\[quote=\\\"(.*?)\\\"\]/su', '[quote=&quot;\1&quot;]', $message);
 
 		// Deal with escaped quotes.
 		$message = str_replace('\"', '&quot;', $message);
@@ -713,8 +1126,8 @@ function vb_prepare_message($message)
 					array('\\',   '(',  ')',  '[',  ']',  '|',  '?',  '/',  '$',  '*',  '+',  '.',  '^',  '{',  '}'),
 					array('\\\\', '\(', '\)', '\[', '\]', '\|', '\?', '\/', '\$', '\*', '\+', '\.', '\^', '\{', '\}'), $code);
 		// Add space before and after any smiley code
-		$message = preg_replace('/([^[:space:]])(' . $code . ')/si', '\1 \2', $message);
-		$message = preg_replace('/(' . $code . ')([^[:space:]])/si', '\1 \2', $message);
+		$message = preg_replace('/([^[:space:]])(' . $code . ')/siu', '\1 \2', $message);
+		$message = preg_replace('/(' . $code . ')([^[:space:]])/siu', '\1 \2', $message);
 	}
 
 	$user_id = $convert->row['poster_id'];
@@ -724,11 +1137,12 @@ function vb_prepare_message($message)
 	$message = str_replace('>', '&gt;', $message);
 
 	// make the post UTF-8
-	$message = vb_set_encoding($message);
+	//$message = vb_set_encoding_from_source($message);
 
 	$message_parser->warn_msg = array(); // Reset the errors from the previous message
 	$message_parser->bbcode_uid = make_uid($convert->row['post_time']);
 	$message_parser->message = $message;
+	$message_parser->message_status = '';
 	unset($message);
 
 	// Make sure options are set.
@@ -736,12 +1150,14 @@ function vb_prepare_message($message)
 	$enable_smilies = (!isset($convert->row['enable_smilies'])) ? true : $convert->row['enable_smilies'];
 	$enable_magic_url = (!isset($convert->row['enable_magic_url'])) ? true : $convert->row['enable_magic_url'];
 
-	// parse($allow_bbcode, $allow_magic_url, $allow_smilies, $allow_img_bbcode = true, $allow_flash_bbcode = true, $allow_quote_bbcode = true, $allow_url_bbcode = true, $update_this_message = true, $mode = 'post')
+	// Tell the parser not to complain if a message is too big
+	$config['max_post_chars'] = 0;
+
 	$message_parser->parse($enable_bbcode, $enable_magic_url, $enable_smilies);
 
 	if (sizeof($message_parser->warn_msg))
 	{
-		$msg_id = isset($convert->row['post_id']) ? $convert->row['post_id'] : $convert->row['privmsgs_id'];
+		$msg_id = isset($convert->row['postid']) ? $convert->row['postid'] : $convert->row['pmtextid'];
 		$convert->p_master->error('<span style="color:red">' . $user->lang['POST_ID'] . ': ' . $msg_id . ' ' . $user->lang['CONV_ERROR_MESSAGE_PARSER'] . ': <br /><br />' . implode('<br />', $message_parser->warn_msg), __LINE__, __FILE__, true);
 	}
 
@@ -856,7 +1272,7 @@ function vb_convert_password_hash($hash)
  */
 function add_user_salt_field()
 {
-	global $db, $phpbb_container;
+	global $phpbb_container;
 
 	$column_name = 'user_passwd_salt';
 	$column_type = 'VCHAR:3';
@@ -952,8 +1368,9 @@ function get_default_group_id_from_vb_name($group_name) {
  * @global type $convert
  */
 function vb_convert_default_groups() {
-	global $db, $src_db, $convert;
+	global $convert;
 
+	$src_db = get_src_db_object();
 	//$sql = "SELECT usergroupid,title,description,pmquota,pmsendmax,ispublicgroup,forumpermissions,pmpermissions,calendarpermissions,wolpermissions,adminpermissions,genericpermissions,genericpermissions2,genericoptions,signaturepermissions,visitormessagepermissions,attachlimit,avatarmaxwidth,avatarmaxheight,avatarmaxsize,profilepicmaxwidth,profilepicmaxheight,profilepicmaxsize,sigpicmaxwidth,sigpicmaxheight,sigpicmaxsize,sigmaximages,sigmaxsizebbcode,sigmaxchars,sigmaxrawchars,sigmaxlines,albumpermissions,albumpicmaxwidth,albumpicmaxheight,albumpicmaxsize,albummaxpics,albummaxsize"
 	$sql = "SELECT *"
 			. " FROM {$convert->src_table_prefix}usergroup"
@@ -962,10 +1379,12 @@ function vb_convert_default_groups() {
 
 	$source_groups = Array();
 	while ($row = $src_db->sql_fetchrow($result)) {
+		$row['title'] = vb_set_encoding_from_source($row['title'], 'usergroup', 'title');
 		$source_groups[$row['usergroupid']] = $row;
 	}
 	$src_db->sql_freeresult($result);
 
+	$db = get_db_object();
 	foreach ($source_groups as $row) {
 		$dest_id = get_default_group_id_from_vb_name($row['title']);
 		// I'm not too sure these parameters are even used any more (I haven't found them in the admin console)
@@ -1011,7 +1430,7 @@ function vb_convert_group_id($src_group_id) {
 }
 
 /**
- * Returns the default language code
+ * If the user doesn't have a configured language, returns the board default one
  *
  * @global type $config
  * @param string $src_lang
@@ -1225,8 +1644,9 @@ function vb_poll_length($day)
  */
 function vb_import_polloption()
 {
-	Global $src_db, $db, $convert;
+	Global $convert;
 
+	$src_db = get_src_db_object();
 	$source = array();
 	$sql = 'SELECT p.*, t.threadid FROM '. $convert->src_table_prefix . 'poll p INNER JOIN '. $convert->src_table_prefix .'thread t ON p.pollid=t.pollid';
 	$result = $src_db->sql_query($sql);
@@ -1236,6 +1656,7 @@ function vb_import_polloption()
 	}
 	$src_db->sql_freeresult($result);
 
+	$db = get_db_object();
 	$db->sql_query($convert->truncate_statement . POLL_OPTIONS_TABLE);
 
 	foreach ($source as $row) {
@@ -1247,7 +1668,7 @@ function vb_import_polloption()
 
 		for ($i=1;$i<=$row['numberoptions'];$i++)
 		{
-			$poll_option = $db->sql_escape(vb_set_encoding($option[$i-1]));
+			$poll_option = $db->sql_escape(vb_set_encoding_from_source($option[$i-1], 'poll'));
 			$sql = 'INSERT INTO '.POLL_OPTIONS_TABLE.' (poll_option_id,topic_id,poll_option_text,poll_option_total)'
 					. ' VALUES ('.$i.','.$topic_id.',\''.$poll_option.'\','.$vote[$i-1].')';
 			$db->sql_query($sql);
@@ -1315,8 +1736,8 @@ function vb_set_moved_id($pollid)
  */
 function vb_clean_datastore()
 {
-	$datastore = new ConversionDataStore();
-	$datastore->purge();
+	$datastore = ConversionDataStore::getInstance();
+	$datastore->clean();
 }
 
 /**
@@ -1449,7 +1870,7 @@ function vb_import_customavatar()
 	global $db, $src_db, $convert, $config, $phpbb_root_path;
 
 	$destination_path = $phpbb_root_path . $config['avatar_path'];
-	
+
 	// Avatars in files
 	if ( $convert->convertor['avatar_loc'] == 1 )
 	{
@@ -1786,7 +2207,7 @@ function vb_convert_pm_folders()
 	$db->sql_multi_insert(PRIVMSGS_FOLDER_TABLE, $folders);
 	vb_conversion_log('vb_convert_pm_folder(): ' . count($folders) . ' PM folder(s) found');
 
-	$datastore = new ConversionDataStore();
+	$datastore = ConversionDataStore::getInstance();
 	$datastore->clearData('pmfolders');
 	$datastore->setData('pmfolders', $rows);
 }
@@ -1817,7 +2238,7 @@ function vb_folder_id($folder_id)
 		$vb_folder_id = PRIVMSGS_INBOX;
 
 	} elseif ($folder_id > 0) {
-		$datastore = new ConversionDataStore();
+		$datastore = ConversionDataStore::getInstance();
 		$folders = $datastore->getData('pmfolders');
 
 		if (isset($folders[$convert->row['poster_id']]['folders'][$folder_id])) {
@@ -2059,14 +2480,31 @@ function vb_profile_field_show_on_reg($profilefield)
  */
 function vb_build_field_name($profilefield)
 {
+	static $number = null;
+
 	$field_name = strtolower($profilefield['title']);
-	$field_name = preg_replace('/[^a-z0-9 _]+/', '', $field_name);
+	//$field_name = preg_replace('/[^a-z0-9 _]+/u', '', $field_name);
+	// Only letters and _ are allowed in a name
+	$field_name = preg_replace('/[^a-z _]+/u', '', $field_name);
 	$field_name = str_replace(' ', '_', $field_name);
 	$field_name = trim($field_name, '_');
 	if (strlen($field_name) > 17) {
-		$field_name = substr($field_name, 0 , 17);
+		$field_name = trim(substr($field_name, 0 , 17), '_');
 	}
-	return trim($field_name, '_');
+	if (empty($field_name))
+	{
+		// It's using special characters so we have to give a default name
+		if (is_null($number))
+		{
+			$number = ord('a');
+		}
+		else
+		{
+			$number++;
+		}
+		$field_name = 'imported_field_' . chr($number);
+	}
+	return $field_name;
 }
 
 /**
@@ -2079,11 +2517,13 @@ function vb_build_field_name($profilefield)
  */
 function vb_convert_profile_custom_fields()
 {
-	global $db, $src_db, $convert, $phpbb_container;
+	global $convert, $phpbb_container;
 
-	$languagecode = $convert->convertor['default_language_code'];
+	//$languagecode = $convert->convertor['default_language_code'];
+	$languagecode = get_vb3_default_language_code();
 	$convertible_types = array_keys($convert->convertor['profilefields_type_convert_table']);
 
+	$db = get_db_object();
 	$languages = array();
 	$sql = "SELECT lang_id FROM " . LANG_TABLE;
 	$result = $db->sql_query($sql);
@@ -2093,6 +2533,7 @@ function vb_convert_profile_custom_fields()
 	$db->sql_freeresult($result);
 	vb_conversion_log("vb_convert_profile_custom_fields(): " . count($languages) . " languages loaded from phpBB.");
 
+	$src_db = get_src_db_object();
 	if (vb_version() >= 370)
 	{
 		$sql = "SELECT profilefieldid,required,hidden,maxlength,size,displayorder,editable,type,data,height,def,optional,searchable,memberlist,regex,form,html"
@@ -2107,6 +2548,8 @@ function vb_convert_profile_custom_fields()
 	while ($row = $src_db->sql_fetchrow($result)) {
 		if (in_array($row['type'], $convertible_types)) {
 			//$profilefields[$row['profilefieldid']] = $row;
+			$row['title'] = vb_set_encoding_from_source($row['title'], 'profilefield', 'title');
+			$row['description'] = vb_set_encoding_from_source($row['title'], 'profilefield', 'description');
 			// Keep the display order
 			$profilefields[] = $row;
 		} else {
@@ -2116,6 +2559,7 @@ function vb_convert_profile_custom_fields()
 	$src_db->sql_freeresult($result);
 	vb_conversion_log("vb_convert_profile_custom_fields(): " . count($profilefields) . " custom profile field(s) loaded.");
 
+	$db = get_db_object();
 	$existing_fields = array();
 	$sql = "SELECT field_id,field_name FROM " . PROFILE_FIELDS_TABLE;
 	$result = $db->sql_query($sql);
@@ -2125,6 +2569,7 @@ function vb_convert_profile_custom_fields()
 	$db->sql_freeresult($result);
 	vb_conversion_log("vb_convert_profile_custom_fields(): " . count($existing_fields) . " existing profile field(s) loaded.");
 
+	$src_db = get_src_db_object();
 	$definition = array();
 	if (vb_version() >= 370)
 	{
@@ -2156,6 +2601,7 @@ function vb_convert_profile_custom_fields()
 		}
 	}
 
+	$db = get_db_object();
 	$sql = "SELECT max(field_id) AS max_field_id, max(field_order) AS max_field_order FROM " . PROFILE_FIELDS_TABLE;
 	$result = $db->sql_query($sql);
 	$row = $db->sql_fetchrow($result);
@@ -2306,8 +2752,10 @@ function vb_convert_profile_custom_fields()
 		$db->sql_query($sql);
 	}
 
-	$user_fields_data = array();
 	$db->sql_query($convert->truncate_statement . PROFILE_FIELDS_DATA_TABLE);
+
+	$src_db = get_src_db_object();
+	$user_fields_data = array();
 	$sql = "SELECT u.userid AS user_id,u.homepage,u.icq,u.aim,u.yahoo,u.msn,u.skype,uf.*"
 			. " FROM {$convert->src_table_prefix}user u"
 			. " LEFT JOIN {$convert->src_table_prefix}userfield uf"
@@ -2321,7 +2769,7 @@ function vb_convert_profile_custom_fields()
 			if (isset($data_conversion[$source_field])) {
 				$user_field_data[$dest_field] = isset($data_conversion[$source_field][$row[$source_field]]) ? $data_conversion[$source_field][$row[$source_field]] : 0;
 			} else {
-				$user_field_data[$dest_field] = vb_set_encoding($row[$source_field]);
+				$user_field_data[$dest_field] = vb_set_encoding_from_source($row[$source_field], 'user', $source_field);
 			}
 		}
 		// All the other stupid unused profile fields can't accept a NULL, so we need to fill in the missing ones with an empty string
@@ -2334,6 +2782,7 @@ function vb_convert_profile_custom_fields()
 	}
 	$src_db->sql_freeresult($result);
 
+	$db = get_db_object();
 	$db->sql_multi_insert(PROFILE_FIELDS_DATA_TABLE, $user_fields_data);
 }
 
@@ -2379,7 +2828,7 @@ function vb_fix_softdeleted($deletedcount)
  */
 function vb_import_icons()
 {
-	global $src_db, $db, $convert, $phpbb_root_path, $config;
+	global $convert, $phpbb_root_path, $config;
 
 	// == Source ==
 	// 1  = post (notepad)
@@ -2406,11 +2855,13 @@ function vb_import_icons()
 	$basic_conversion_source = array();
 	$basic_conversion_dest = array();
 
+	$src_db = get_src_db_object();
 	$source = array();
 	$sql = "SELECT iconid,title,iconpath FROM {$convert->src_table_prefix}icon";
 	$result = $src_db->sql_query($sql);
 	while ($row = $src_db->sql_fetchrow($result)) {
 		$row['iconid'] = intval($row['iconid']);
+		$row['title'] = vb_set_encoding_from_source($row['title'], 'icon', 'title');
 		$source[$row['iconid']] = $row;
 		foreach ($basic_conversion as $title => $icons_url)
 		{
@@ -2433,6 +2884,7 @@ function vb_import_icons()
 	// 9  = question
 	// 10 = exclamation
 
+	$db = get_db_object();
 	$dest = array();
 	$existing = array();
 	$icon_id = 0;
@@ -2486,22 +2938,26 @@ function vb_import_icons()
 						if ($pos !== FALSE) {
 							$file_ext = substr($filename_src, $pos);
 							$icon_name = strtolower(str_replace(' ', '_', $icon_source['title']));
-							@copy($filename_src, $folder_dest . '/' . $icon_name . $file_ext);
-							$icon_id++;
-							$icon_url = 'imported/' . $icon_name . $file_ext;
-							// Protection in case another conversion is run after another
-							if (!isset($existing[$icon_url])) {
-								$insert = array(
-									'icons_id' => $icon_id,
-									'icons_url' => $icon_url,
-									'icons_width' => $width,
-									'icons_height' => $height,
-									'icons_order' => $icon_id,
-									'display_on_posting' => 1,
-								);
-								$inserts[] = $insert;
-								$icon_conversion[$icon_source['iconid']] = $icon_id;
-								vb_conversion_log("vb_import_icons(): icon '{$icon_url}' imported.");
+							if (file_exists($filename_src)) {
+								@copy($filename_src, $folder_dest . '/' . $icon_name . $file_ext);
+								$icon_id++;
+								$icon_url = 'imported/' . $icon_name . $file_ext;
+								// Protection in case another conversion is run after another
+								if (!isset($existing[$icon_url])) {
+									$insert = array(
+										'icons_id' => $icon_id,
+										'icons_url' => $icon_url,
+										'icons_width' => $width,
+										'icons_height' => $height,
+										'icons_order' => $icon_id,
+										'display_on_posting' => 1,
+									);
+									$inserts[] = $insert;
+									$icon_conversion[$icon_source['iconid']] = $icon_id;
+									vb_conversion_log("vb_import_icons(): icon '{$icon_url}' imported.");
+								}
+							} else {
+								vb_conversion_log("vb_import_icons(): WARNING cannot find the icon file '{$filename_src}'.");
 							}
 						}
 					} else {
@@ -2513,9 +2969,9 @@ function vb_import_icons()
 	}
 	$db->sql_multi_insert(ICONS_TABLE, $inserts);
 
-	$ds = new ConversionDataStore();
+	$ds = ConversionDataStore::getInstance();
 	$ds->setData('icon_conversion', $icon_conversion);
-	unset ($ds);
+	unset($ds);
 }
 
 /**
@@ -2529,7 +2985,7 @@ function vb_icon_id($source_id)
 	static $icon_conversion = array();
 
 	if (empty($icon_conversion)) {
-		$ds = new ConversionDataStore();
+		$ds = ConversionDataStore::getInstance();
 		$icon_conversion = $ds->getData('icon_conversion');
 		unset($ds);
 	}
@@ -2667,8 +3123,9 @@ function vb_fix_deleted_threads()
  */
 function vb_convert_banemail()
 {
-	global $src_db, $db, $convert;
+	global $convert;
 
+	$src_db = get_src_db_object();
 	$emails = array();
 	$sql = "SELECT data FROM {$convert->src_table_prefix}datastore WHERE title='banemail'";
 	$result = $src_db->sql_query($sql);
@@ -2688,7 +3145,7 @@ function vb_convert_banemail()
 			$bans[] = array(
 				'ban_userid' => 0,
 				'ban_ip' => '',
-				'ban_email' => vb_set_encoding($email),
+				'ban_email' => vb_set_encoding_from_source($email, 'datastore', 'data'),
 				'ban_start' => time(),
 				'ban_end' => 0,
 				'ban_exclude' => 0,
@@ -2698,6 +3155,7 @@ function vb_convert_banemail()
 		}
 	}
 	if (!empty($bans)) {
+		$db = get_db_object();
 		$db->sql_multi_insert(BANLIST_TABLE, $bans);
 	}
 }
@@ -2711,8 +3169,9 @@ function vb_convert_banemail()
  */
 function vb_convert_censorwords()
 {
-	global $src_db, $db, $convert;
+	global $convert;
 
+	$src_db = get_src_db_object();
 	$sql = "SELECT value FROM {$convert->src_table_prefix}setting WHERE varname='censorwords'";
 	$result = $src_db->sql_query($sql);
 	if ($row = $src_db->sql_fetchrow($result)) {
@@ -2733,20 +3192,25 @@ function vb_convert_censorwords()
 	{
 		foreach ($words as $word)
 		{
-			if ((substr($word, 0, 1) == '{') && (substr($word, -1) == '}')) {
-				$word = substr($word, 1, strlen($word) -2);
-				$replacement = str_repeat($character, strlen($word));
-			} else {
-				$replacement = str_repeat($character, strlen($word));
-				$word = '*' . $word . '*';
+			$word = trim($word);
+			if (!empty($word))
+			{
+				if ((substr($word, 0, 1) == '{') && (substr($word, -1) == '}')) {
+					$word = substr($word, 1, strlen($word) -2);
+					$replacement = str_repeat($character, strlen($word));
+				} else {
+					$replacement = str_repeat($character, strlen($word));
+					$word = '*' . $word . '*';
+				}
+				$censorwords[] = array(
+					'word' => vb_set_encoding_from_source($word, 'setting', 'value'),
+					'replacement' => vb_set_encoding_from_source($replacement, 'setting', 'value'),
+				);
 			}
-			$censorwords[] = array(
-				'word' => vb_set_encoding($word),
-				'replacement' => vb_set_encoding($replacement),
-			);
 		}
 	}
 	if (!empty($censorwords)) {
+		$db = get_db_object();
 		$db->sql_query($convert->truncate_statement . WORDS_TABLE);
 		$db->sql_multi_insert(WORDS_TABLE, $censorwords);
 	}
@@ -2763,8 +3227,9 @@ function vb_convert_censorwords()
  */
 function vb_import_smilies()
 {
-	global $src_db, $db, $convert, $phpbb_root_path, $config;
+	global $convert, $phpbb_root_path, $config;
 
+	$src_db = get_src_db_object();
 	$src_smilies = array();
 	$existing_smilies = get_smilies_array();
 
@@ -2772,11 +3237,13 @@ function vb_import_smilies()
 	$result = $src_db->sql_query($sql);
 	while ($row = $src_db->sql_fetchrow($result)) {
 		if (!in_array($row['smilietext'], $existing_smilies)) {
+			$row['title'] = vb_set_encoding_from_source($row['title'], 'smilie', 'title');
 			$src_smilies[] = $row;
 		}
 	}
 	$src_db->sql_freeresult($result);
 
+	$db = get_db_object();
 	$sql = "SELECT max(smiley_order) AS max_smiley_order FROM " . SMILIES_TABLE;
 	$result = $db->sql_query($sql);
 	if ($row = $db->sql_fetchrow($result)) {
@@ -2798,19 +3265,23 @@ function vb_import_smilies()
 				if (is_dir($folder_dest))
 				{
 					$filename_dest = 'imported_' . basename($filename_src);
-					@copy($filename_src, $folder_dest . '/' . $filename_dest);
-					$smiley_order++;
-					$new_smiley = array(
-						'code' => $smilie['smilietext'],
-						'emotion' => $smilie['title'],
-						'smiley_url' => $filename_dest,
-						'smiley_width' => $width,
-						'smiley_height' => $height,
-						'smiley_order' => $smiley_order,
-						'display_on_posting' => 1,
-					);
-					$dst_smilies[] = $new_smiley;
-					vb_conversion_log("vb_import_smilies(): smiley '{$smilie['smilietext']}' imported.");
+					if (file_exists($filename_src)) {
+						@copy($filename_src, $folder_dest . '/' . $filename_dest);
+						$smiley_order++;
+						$new_smiley = array(
+							'code' => $smilie['smilietext'],
+							'emotion' => $smilie['title'],
+							'smiley_url' => $filename_dest,
+							'smiley_width' => $width,
+							'smiley_height' => $height,
+							'smiley_order' => $smiley_order,
+							'display_on_posting' => 1,
+						);
+						$dst_smilies[] = $new_smiley;
+						vb_conversion_log("vb_import_smilies(): smiley '{$smilie['smilietext']}' imported.");
+					} else {
+						vb_conversion_log("vb_import_smilies(): WARNING: Can't find the picture file for the smiley '{$smilie['smilietext']}' ({$filename_src}).");
+					}
 				}
 			}
 		}
@@ -3081,12 +3552,11 @@ function vb_get_user_name_from_topic_id($topic_id)
  */
 function vb_convert_infractions()
 {
-	global $src_db, $db, $convert;
+	global $convert;
 
 	if (vb_version() >= 370)
 	{
-		$db->sql_query($convert->truncate_statement . WARNINGS_TABLE);
-
+		$src_db = get_src_db_object();
 		$infractions = array();
 		$sql = "SELECT infractionid,infractionlevelid,i.postid,i.userid,whoadded,points,i.dateline,note,action,actiondateline,actionuserid,actionreason,expires,i.threadid,customreason,t.forumid"
 				. " FROM {$convert->src_table_prefix}infraction i"
@@ -3096,6 +3566,9 @@ function vb_convert_infractions()
 			$infractions[] = $row;
 		}
 		$src_db->sql_freeresult($result);
+
+		$db = get_db_object();
+		$db->sql_query($convert->truncate_statement . WARNINGS_TABLE);
 
 		$sql = "SELECT MAX(log_id) AS max_log_id FROM " . LOG_TABLE;
 		$result = $db->sql_query($sql);
@@ -3139,7 +3612,7 @@ function vb_convert_infractions()
 				'log_operation' => 'LOG_USER_WARNING_BODY',
 				'log_data' => serialize(
 								array(
-									vb_set_encoding($infraction['customreason']),
+									vb_set_encoding_from_source($infraction['customreason'], 'infraction', 'customreason'),
 								)
 							),
 			);
@@ -3262,6 +3735,25 @@ function vb_create_gallery_file_system()
 			@mkdir($phpbbgallery_core_file_mini, 0755, true);
 			@mkdir($phpbbgallery_core_file_source, 0755, true);
 		}
+
+		if (!is_dir($phpbbgallery_core_file) || !is_writable($phpbbgallery_core_file)) {
+			$convert->p_master->error("Album gallery path is not writeable: {$phpbbgallery_core_file}", __LINE__, __FILE__);
+			exit();
+		}
+		vb_conversion_log("vb_create_gallery_file_system(): phpbbgallery folder is '{$phpbbgallery_core_file}'");
+
+		if (!is_dir($phpbbgallery_core_file_medium) || !is_writable($phpbbgallery_core_file_medium)) {
+			$convert->p_master->error("Album gallery path is not writeable: {$phpbbgallery_core_file_medium}", __LINE__, __FILE__);
+			exit();
+		}
+		if (!is_dir($phpbbgallery_core_file_mini) || !is_writable($phpbbgallery_core_file_mini)) {
+			$convert->p_master->error("Album gallery path is not writeable: {$phpbbgallery_core_file_mini}", __LINE__, __FILE__);
+			exit();
+		}
+		if (!is_dir($phpbbgallery_core_file_source) || !is_writable($phpbbgallery_core_file_source)) {
+			$convert->p_master->error("Album gallery path is not writeable: {$phpbbgallery_core_file_source}", __LINE__, __FILE__);
+			exit();
+		}
 	}
 }
 
@@ -3282,7 +3774,7 @@ function vb_image_name($caption)
 	{
 		$caption = 'Unnamed';
 	}
-	return vb_set_default_encoding($caption);
+	return vb_set_encoding_from_source($caption, 'albumpicture');
 }
 
 function vb_save_image($filedata)
@@ -3482,10 +3974,17 @@ function vb_version()
 
 	if (is_null($vb_version))
 	{
-		$version_string = get_config_value('templateversion');
-		$version_string = str_replace('.', '', $version_string);
-		$vb_version = intval($version_string);
-		vb_conversion_log("vb_version(): vBulletin version {$vb_version} loaded.");
+		$datastore = ConversionDataStore::getInstance();
+		$vb_version = $datastore->getData('vb_version');
+		if (empty($vb_version))
+		{
+			$version_string = get_config_value('templateversion');
+			$version_string = str_replace('.', '', $version_string);
+			$vb_version = intval($version_string);
+			$datastore->setData('vb_version', $vb_version);
+			vb_conversion_log("vb_version(): vBulletin version {$vb_version} detected.");
+		}
+		unset($datastore);
 	}
 	return $vb_version;
 }

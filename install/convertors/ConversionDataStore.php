@@ -12,15 +12,40 @@ class ConversionDataStore
 	private static $prefix = '_convertor_';
 	private static $extension = '.data';
 	private static $context_file = '_context.data';
-	private $readonly = false;
+	private $path = '';
+	private $dirty = false;
 	private $data = Array();
 
-	function __construct() {
+	/**
+     * Returns the *Singleton* instance of this class.
+     *
+     * @staticvar Singleton $instance The *Singleton* instances of this class.
+     *
+     * @return Singleton The *Singleton* instance.
+     */
+    public static function getInstance()
+    {
+        static $instance = null;
+        if (null === $instance) {
+            $instance = new static();
+        }
+
+        return $instance;
+    }
+
+	protected function __construct()
+	{
+		$this->path = getcwd();
+		if (substr($this->path, -1) != '/')
+		{
+			$this->path .= '/';
+		}
 		$this->restoreContext();
 	}
 
-	function __destruct() {
-		if (!$this->readonly)
+	public function __destruct()
+	{
+		if ($this->dirty)
 		{
 			$this->saveContext();
 		}
@@ -28,7 +53,12 @@ class ConversionDataStore
 
 	private function dataFileName($data_name)
 	{
-		return self::$folder . self::$prefix . md5($data_name) . self::$extension;
+		return $this->path . self::$folder . self::$prefix . md5($data_name) . self::$extension;
+	}
+
+	private function contextFileName()
+	{
+		return $this->path . self::$context_file;
 	}
 
 	private function &loadData($data_name)
@@ -47,11 +77,15 @@ class ConversionDataStore
 		$saved = false;
 
 		$filename = $this->dataFileName($data_name);
-		$filehandle = @fopen($filename, 'w');
+		$filehandle = fopen($filename, 'w');
 		if ($filehandle) {
-			fwrite($filehandle, serialize($this->data[$data_name]));
+			if (flock($filehandle, LOCK_EX)) {
+				fwrite($filehandle, serialize($this->data[$data_name]));
+				fflush($filehandle);
+				flock($filehandle, LOCK_UN);
+				$saved = true;
+			}
 			fclose($filehandle);
-			$saved = true;
 		}
 		return $saved;
 	}
@@ -65,20 +99,27 @@ class ConversionDataStore
 			$this->saveData($data_name);
 		}
 
-		$filehandle = @fopen(self::$context_file, 'w');
+		$filename = $this->contextFileName();
+		$filehandle = fopen($filename, 'w');
 		if ($filehandle) {
-			fwrite($filehandle, serialize($context));
+			if (flock($filehandle, LOCK_EX)) {
+				fwrite($filehandle, serialize($context));
+				fflush($filehandle);
+				flock($filehandle, LOCK_UN);
+				$saved = true;
+			}
 			fclose($filehandle);
-			$saved = true;
 		}
+		$this->dirty = !$saved;
 		return $saved;
 	}
 
 	private function restoreContext()
 	{
 		$context = Array();
-		if (is_file(self::$context_file)) {
-			$tmp = file_get_contents(self::$context_file);
+		$contextFileName = $this->contextFileName();
+		if (is_file($contextFileName)) {
+			$tmp = file_get_contents($contextFileName);
 			$context = unserialize($tmp);
 		}
 		if (!empty($context)) {
@@ -86,6 +127,7 @@ class ConversionDataStore
 				$this->loadData($data_name);
 			}
 		}
+		$this->dirty = false;
 	}
 
 	/**
@@ -113,8 +155,8 @@ class ConversionDataStore
 	function clean()
 	{
 		$this->purge();
-		@unlink(self::$context_file);
-		$this->readonly = true;
+		@unlink($this->contextFileName());
+		$this->dirty = false;
 	}
 
 	/**
@@ -140,6 +182,7 @@ class ConversionDataStore
 	function setData($data_name, &$data)
 	{
 		$this->data[$data_name] = &$data;
+		$this->dirty = true;
 	}
 
 	/**

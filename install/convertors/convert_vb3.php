@@ -32,8 +32,8 @@ $dbms = $phpbb_config_php_file->convert_30_dbms_to_31($dbms);
 * used on the initial list of convertors and to populate the default settings
 */
 $convertor_data = array(
-	'forum_name'	=> 'vBulletin versions 3.7 & 3.8 (possibly 3.5)',
-	'version'		=> '1.0.0-RC9',
+	'forum_name'	=> 'vBulletin versions 3.5, 3.7 & 3.8 (3.6 has not been tested)',
+	'version'		=> '1.0.0.15.4.5',
 	'phpbb_version'	=> '3.1.2',
 	'author'		=> '<a href="https://www.phpbb.com/community/memberlist.php?mode=viewprofile&u=1438256">FredQ</a>',
 	'dbms'			=> $dbms,
@@ -44,7 +44,12 @@ $convertor_data = array(
 	'dbname'		=> $dbname,
 	'table_prefix'	=> 'vb_',
 	'forum_path'	=> '../forums',
-	'author_notes'	=> 'Please refer to the <a href="https://www.phpbb.com/customise/db/converter/vbulletin_%283.7%29_to_phpbb_3.1.2/">phpBB forum</a> if you need more information about the convertor.',
+	'author_notes'	=> ""
+	. "<strong>Please read this note if your board is or has a default language different than English:</strong><br />\n"
+	. "<ul><li>It is advisable to install your languages in phpBB <strong>before</strong> starting the conversion</li><br />\n"
+	. "<li>If you want the default user groups to be mapped to the default phpBB user groups, you need to change the names of the groups in the file <i>convert_vb3_config.php</i><br />\n"
+	. "Just open the file <i>convert_vb3_config.php</i> and read all the information in there.<br /></li></ul><br />\n"
+	. "Please refer to the <a href='https://www.phpbb.com/customise/db/converter/vbulletin_%283.7%29_to_phpbb_3.1.2/'>phpBB forum</a> if you need more information about the conversion.<br />\n",
 );
 
 /**
@@ -275,8 +280,8 @@ $config_schema = array(
 		'require_activation'	=> 'verifyemail',
 		'search_anonymous_interval'	=> 'searchfloodtime',
 		'search_interval'		=> 'searchfloodtime',
-		'site_desc'				=> 'vb_set_encoding(description)',
-		'sitename'				=> 'vb_set_encoding(bbtitle)',
+		'site_desc'				=> 'vb_set_encoding_from_setting(description)',
+		'sitename'				=> 'vb_set_encoding_from_setting(bbtitle)',
 		'topics_per_page'		=> 'maxthreads',
 		'smtp_delivery'			=> 'use_smtp',
 		'smtp_host'				=> 'smtp_host',
@@ -301,38 +306,11 @@ $test_file = 'showthread.php';
 */
 if (!$get_info)
 {
-
-	$src_db->sql_return_on_error(false);
-
-	// Let us set a temporary config variable for user id incrementing
-	$sql = "SELECT userid
-		FROM {$convert->src_table_prefix}user
-		WHERE userid = 1";
-	$result = $src_db->sql_query($sql);
-	$user_id = (int) $src_db->sql_fetchfield('userid');
-	$src_db->sql_freeresult($result);
-
-	// If there is a user id 1, we need to increment user ids. :/
-	if ($user_id === 1)
-	{
-		// Try to get the maximum user id possible...
-		$sql = "SELECT MAX(userid) AS max_user_id
-			FROM {$convert->src_table_prefix}user";
-		$result = $src_db->sql_query($sql);
-		$user_id = (int) $src_db->sql_fetchfield('max_user_id');
-		$src_db->sql_freeresult($result);
-
-		set_config('increment_user_id', ($user_id + 1), true);
-	}
-	else
-	{
-		set_config('increment_user_id', 0, true);
-	}
-
 	// Overwrite maximum avatar width/height
 	@define('DEFAULT_AVATAR_X_CUSTOM', get_config_value('avatar_max_width'));
 	@define('DEFAULT_AVATAR_Y_CUSTOM', get_config_value('avatar_max_height'));
 
+	// Default group names in English if they haven't been set already
 	if (!defined('VB_GROUP_GUESTS')) define('VB_GROUP_GUESTS', "Unregistered / Not Logged In");
 	if (!defined('VB_GROUP_AWAITING_EMAIL')) define('VB_GROUP_AWAITING_EMAIL', "Users Awaiting Email Confirmation");
 	if (!defined('VB_GROUP_AWAITING_MODERATION')) define('VB_GROUP_AWAITING_MODERATION', "Users Awaiting Moderation");
@@ -472,8 +450,7 @@ if (!$get_info)
 
 		'album_dataloc'			=> get_config_value('album_dataloc'),
 
-		// Don't change this without knowing what you're doing: you're probably going to brake the converter
-		'default_language_code' => 'en',
+		//'default_language_code' => get_vb3_default_language_code(),
 
 		// We'll be trying to map vBulletin default groups to phpBB default groups
 		// Please note this is based on an English version of vBulletin only, and assuming you haven't changed the default names.
@@ -912,6 +889,8 @@ if (!$get_info)
 				'primary'		=> 'attachment.attachmentid',
 				'query_first'	=>  array('target', $convert->truncate_statement . ATTACHMENTS_TABLE),
 				'autoincrement'	=> 'attach_id',
+				// You need this to retreive the character encoding used to store strings on this table
+				'execute_first'	=> '$convert->convertor["current_table_name"] = "attachment";',
 
 				array('attach_id',			'attachment.attachmentid',			''),
 				array('post_msg_id',		'attachment.postid',				''),
@@ -922,11 +901,9 @@ if (!$get_info)
 				array('',					'attachment.filedata',				''),
 				array('',					'attachment.thumbnail',				''),
 				array('physical_filename',	'attachment.userid',				'vb_import_attachment'),
-				array('real_filename',		'attachment.filename',				array('function1' => 'vb_set_encoding', 'function2' => 'utf8_htmlspecialchars')),
+				array('real_filename',		'attachment.filename',				array('function1' => 'vb_set_encoding_from_source', 'function2' => 'utf8_htmlspecialchars')),
 				array('download_count',		'attachment.counter',				''),
 				array('attach_comment',		'',									''),
-				//array('extension',			'attachment.filename',				'vb_file_ext'),
-				// This one is better
 				array('extension',			'attachment.extension',				''),
 				array('mimetype',			'attachmenttype.mimetype',			'vb_mimetype'),
 				array('filesize',			'attachment.filesize',				''),
@@ -943,9 +920,11 @@ if (!$get_info)
 			array(
 				'target'		=> BANLIST_TABLE,
 				'query_first'	=> array('target', $convert->truncate_statement . BANLIST_TABLE),
+				// You need this to retreive the character encoding used to store strings on this table
+				'execute_first'	=> '$convert->convertor["current_table_name"] = "userban";',
 
 				array('ban_userid',			'userban.userid',			'vb_user_id'),
-				array('ban_reason',			'userban.reason',			''),
+				array('ban_reason',			'userban.reason',			'vb_set_encoding_from_source'),
 				array('ban_give_reason',	'',							''),
 				array('ban_start',			'userban.bandate',			''),
 				array('ban_end',			'userban.liftdate',			''),
@@ -955,9 +934,12 @@ if (!$get_info)
 				'target'		=> RANKS_TABLE,
 				'query_first'	=> array('target', $convert->truncate_statement . RANKS_TABLE),
 				'autoincrement'	=> 'rank_id',
+				// You need this to retreive the character encoding used to store strings on this table
+				'execute_first'	=> '$convert->convertor["current_table_name"] = "ranks";',
 
 				array('rank_id',					'ranks.rankid',				''),
-				array('rank_title',					'ranks.rankimg',			array('function1' => 'vb_set_default_encoding', 'function2' => 'utf8_htmlspecialchars')),
+				//array('rank_title',					'ranks.rankimg',			array('function1' => 'vb_set_encoding_from_source', 'function2' => 'utf8_htmlspecialchars')),
+				array('rank_title',					'ranks.rankimg',			array('function1' => 'vb_set_encoding_from_source', 'function2' => 'strip_tags')),
 				array('rank_min',					'ranks.minposts',			array('typecast' => 'int')),
 				array('rank_special',				0,							''),
 				array('rank_image',					'',							''),
@@ -968,26 +950,28 @@ if (!$get_info)
 				'query_first'	=> array('target', $convert->truncate_statement . TOPICS_TABLE),
 				'primary'		=> 'thread.threadid',
 				'autoincrement'	=> 'topic_id',
+				// You need this to retreive the character encoding used to store strings on this table
+				'execute_first'	=> '$convert->convertor["current_table_name"] = "thread";',
 
 				array('topic_id',				'thread.threadid',					''),
 				array('forum_id',				'thread.forumid',					''),
 				array('icon_id',				'thread.iconid',					'vb_icon_id'),
 				array('topic_attachment',		'thread.attach',					''),
-				array('topic_title',			'thread.title',						'vb_set_encoding'),
+				array('topic_title',			'thread.title',						'vb_set_encoding_from_source'),
 				array('topic_poster',			'thread.postuserid AS poster_id',	'vb_user_id'),
 				array('topic_time',				'thread.dateline',					''),
 				array('topic_views',			'thread.views',						''),
 				array('topic_status',			'thread.open',						'thread_open_to_topic_status'),
 				array('topic_type',				'thread.sticky',					''),
 				array('topic_first_post_id',	'thread.firstpostid',				''),
-				array('topic_first_poster_name','thread.postusername',				'vb_set_default_encoding'),
+				array('topic_first_poster_name','thread.postusername',				'vb_set_encoding_from_source'),
 				array('topic_last_post_id',		(vb_version()>=370) ? 'thread.lastpostid' : '',				''),
 				array('topic_last_poster_id',	'thread.lastposter',				'vb_get_userid_from_username'),
-				array('topic_last_poster_name',	'thread.lastposter',				'vb_set_default_encoding'),
+				array('topic_last_poster_name',	'thread.lastposter',				'vb_set_encoding_from_source'),
 				array('topic_last_post_time',	'thread.lastpost',					''),
 				array('topic_moved_id',			'thread.pollid',					'vb_set_moved_id'),
 
-				array('poll_title',				'poll.question AS poll_title',		array('function1' => 'null_to_str', 'function2' => 'vb_set_encoding', 'function3' => 'utf8_htmlspecialchars')),
+				array('poll_title',				'poll.question AS poll_title',		array('function1' => 'null_to_str', 'function2' => 'vb_set_encoding_from_source', 'function3' => 'utf8_htmlspecialchars')),
 				array('poll_start',				'poll.dateline AS poll_start',		'null_to_zero'),
 				array('poll_length',			'poll.timeout AS poll_length',		'vb_poll_length'),
 				array('',						'poll.numberoptions',				''),
@@ -996,7 +980,7 @@ if (!$get_info)
 				array('poll_vote_change',		0,									''),
 				array('topic_visibility',		'thread.visible',					''),	// Using the same codes :-)
 				array('topic_delete_time',		(vb_version()>=370) ? 'deletionlog.dateline AS d_dateline' : '',''),
-				array('topic_delete_reason',	'deletionlog.reason AS d_reason',	'vb_set_default_encoding'),
+				array('topic_delete_reason',	'deletionlog.reason AS d_reason',	'vb_set_encoding_from_source'),
 				array('topic_delete_user',		'deletionlog.userid AS d_user_id',	'vb_user_id'),
 				array('topic_posts_approved',	'thread.replycount',				''),
 				array('topic_posts_softdeleted',(vb_version()>=370) ? 'thread.deletedcount' : '',				'vb_fix_softdeleted'),
@@ -1012,6 +996,8 @@ if (!$get_info)
 				'target'		=> FORUMS_WATCH_TABLE,
 				'primary'		=> 'subscribeforum.subscribeforumid',
 				'query_first'	=> array('target', $convert->truncate_statement . FORUMS_WATCH_TABLE),
+				// You need this to retreive the character encoding used to store strings on this table
+				'execute_first'	=> '$convert->convertor["current_table_name"] = "subscribeforum";',
 
 				array('forum_id',				'subscribeforum.forumid',		''),
 				array('user_id',				'subscribeforum.userid',		'vb_user_id'),
@@ -1022,6 +1008,8 @@ if (!$get_info)
 				'target'		=> TOPICS_WATCH_TABLE,
 				'primary'		=> 'subscribethread.subscribethreadid',
 				'query_first'	=> array('target', $convert->truncate_statement . TOPICS_WATCH_TABLE),
+				// You need this to retreive the character encoding used to store strings on this table
+				'execute_first'	=> '$convert->convertor["current_table_name"] = "subscribethread";',
 
 				array('topic_id',				'subscribethread.threadid',		''),
 				array('user_id',				'subscribethread.userid',		'vb_user_id'),
@@ -1032,6 +1020,8 @@ if (!$get_info)
 				'target'		=> POLL_VOTES_TABLE,
 				'primary'		=> 'pollvote.pollvoteid',
 				'query_first'	=> array('target', $convert->truncate_statement . POLL_VOTES_TABLE),
+				// You need this to retreive the character encoding used to store strings on this table
+				'execute_first'	=> '$convert->convertor["current_table_name"] = "pollvote";',
 
 				array('poll_option_id',			'pollvote.voteoption',		''),	// Any need for the function vb_voteoption?
 				array('topic_id',				'thread.threadid',			''),
@@ -1050,6 +1040,7 @@ if (!$get_info)
 					$config["max_post_chars"] = 0;
 					$config["min_post_chars"] = 0;
 					$config["max_quote_depth"] = 0;
+					$convert->convertor["current_table_name"] = "post";
 				',
 
 				array('post_id',				'post.postid',						''),
@@ -1064,17 +1055,17 @@ if (!$get_info)
 				array('enable_smilies',			'post.allowsmilie',					''),
 				array('enable_sig',				'post.showsignature',				''),
 				array('enable_magic_url',		1,									''),
-				array('post_username',			'post.username',					'vb_set_encoding'),
-				array('post_subject',			'post.title',						'vb_set_encoding'),
+				array('post_username',			'post.username',					'vb_set_encoding_from_source'),
+				array('post_subject',			'post.title',						'vb_set_encoding_from_source'),
 				array('post_attachment',		'post.attach',						''),
 
 				array('post_edit_time',			'editlog.dateline AS e_dateline',	array('typecast' => 'int')),
 				array('post_edit_count',		'editlog.postid AS e_postid',		'is_positive'),
-				array('post_edit_reason',		'editlog.reason AS e_reason',		'vb_set_encoding'),
+				array('post_edit_reason',		'editlog.reason AS e_reason',		'vb_set_encoding_from_source'),
 				array('post_edit_user',			'editlog.userid AS e_userid',		'vb_user_id'),
 
 				array('post_delete_time',		(vb_version()>=370) ? 'deletionlog.dateline AS d_dateline' : '',	''),
-				array('post_delete_reason',		'deletionlog.reason AS d_reason',		'vb_set_encoding'),
+				array('post_delete_reason',		'deletionlog.reason AS d_reason',		'vb_set_encoding_from_source'),
 				array('post_delete_user',		'deletionlog.userid AS d_userid',		'vb_user_id'),
 
 				array('bbcode_uid',				'post.dateline AS post_time',		'make_uid'),
@@ -1103,6 +1094,7 @@ if (!$get_info)
 					$config["max_post_chars"] = 0;
 					$config["min_post_chars"] = 0;
 					$config["max_quote_depth"] = 0;
+					$convert->convertor["current_table_name"] = "pmtext";
 					vb_convert_pm_folders();
 				',
 
@@ -1116,7 +1108,7 @@ if (!$get_info)
 				array('enable_smilies',			'pmtext.allowsmilie AS enable_smilies',	''),
 				array('enable_magic_url',		1,										''),
 				array('enable_sig',				'pmtext.showsignature',					''),
-				array('message_subject',		'pmtext.title',							'vb_set_encoding'),
+				array('message_subject',		'pmtext.title',							'vb_set_encoding_from_source'),
 				array('message_edit_reason',	'',										''),
 				array('message_edit_user',		0,										''),
 				array('message_edit_time',		0,										''),
@@ -1136,6 +1128,8 @@ if (!$get_info)
 				'target'		=> PRIVMSGS_TO_TABLE,
 				'primary'		=> 'pm.pmid',
 				'query_first'	=> array('target', $convert->truncate_statement . PRIVMSGS_TO_TABLE),
+				// You need this to retreive the character encoding used to store strings on this table
+				'execute_first'	=> '$convert->convertor["current_table_name"] = "pm";',
 
 				array('msg_id',					'pm.pmtextid',				''),
 				array('user_id',				'pm.userid AS poster_id',	'vb_user_id'),
@@ -1155,13 +1149,15 @@ if (!$get_info)
 			array(
 				'target'		=> GROUPS_TABLE,
 				'autoincrement'	=> 'group_id',
+				// You need this to retreive the character encoding used to store strings on this table
+				'execute_first'	=> '$convert->convertor["current_table_name"] = "usergroup";',
 
 				array('group_id',				'usergroup.usergroupid',			''),
 				array('group_type',				'usergroup.ispublicgroup',			'vb_convert_group_type'),
 				array('group_display',			0,									''),
 				array('group_legend',			0,									''),
 				array('group_name',				'usergroup.title',					'vb_convert_group_name'), // vb_set_encoding called in vb_convert_group_name
-				array('group_desc',				'usergroup.description',			'vb_set_encoding'),
+				array('group_desc',				'usergroup.description',			'vb_set_encoding_from_source'),
 				array('group_sig_chars',		(vb_version()>=370) ? 'usergroup.sigmaxchars' : 0,			''),
 				array('group_max_recipients',	'usergroup.pmsendmax',				''),
 
@@ -1181,6 +1177,7 @@ if (!$get_info)
 				// This will add all the users belonging to the groups
 				'execute_first' => '
 					add_membergroups();
+					$convert->convertor["current_table_name"] = "user";
 					',
 
 				array('user_id',				'user.userid',						'vb_user_id'),
@@ -1189,8 +1186,8 @@ if (!$get_info)
 				array('group_id',				'user.usergroupid',					'vb_convert_group_id'),
 				array('user_ip',				'user.ipaddress',					''),
 				array('user_regdate',			'user.joindate',					''),
-				array('username',				'user.username',					'vb_set_default_encoding'), // recode to utf8 with default lang
-				array('username_clean',			'user.username',					array('function1' => 'vb_set_default_encoding', 'function2' => 'utf8_clean_string')),
+				array('username',				'user.username',					'vb_set_encoding_from_source'),
+				array('username_clean',			'user.username',					array('function1' => 'vb_set_encoding_from_source', 'function2' => 'utf8_clean_string')),
 				array('user_password',			'user.password',					'vb_convert_password_hash'),
 				array('user_passwd_salt',		'user.salt',						''),
 				array('user_posts',				'user.posts',						'intval'),
@@ -1202,7 +1199,7 @@ if (!$get_info)
 				array('user_lang',				'language.languagecode',			'vb_get_default_lang'),
 				// vb3 used the same timezone format as phpBB2
 				array('user_timezone',			'user.timezoneoffset',				'vb_convert_timezone'),
-				array('user_dateformat',		$config['default_dateformat'],		array('function1' => 'vb_set_encoding', 'function2' => 'fill_dateformat')),
+				array('user_dateformat',		$config['default_dateformat'],		array('function1' => 'vb_set_encoding_from_source', 'function2' => 'fill_dateformat')),
 				array('user_inactive_reason',	0,									''),
 				array('user_inactive_time',		0,									''),
 
@@ -1254,10 +1251,12 @@ if (!$get_info)
 				'target'		=> USERS_TABLE,
 				'primary'		=> 'user.userid',
 				'autoincrement'	=> 'user_id',
+				// You need this to retreive the character encoding used to store strings on this table
+				'execute_first'	=> '$convert->convertor["current_table_name"] = "user";',
 
 				'execute_last'	=> '
 					remove_invalid_users();
-				',
+					',
 
 				array('user_id',				'user.userid',						'vb_user_id'),
 				array('',						'user.userid AS poster_id',			'vb_user_id'),
@@ -1265,8 +1264,8 @@ if (!$get_info)
 				array('group_id',				'user.usergroupid',					'vb_convert_group_id'),
 				array('user_ip',				'user.ipaddress',			''),
 				array('user_regdate',			'user.joindate',					''),
-				array('username',				'user.username',					'vb_set_default_encoding'), // recode to utf8 with default lang
-				array('username_clean',			'user.username',					array('function1' => 'vb_set_default_encoding', 'function2' => 'utf8_clean_string')),
+				array('username',				'user.username',					'vb_set_encoding_from_source'), // recode to utf8 with default lang
+				array('username_clean',			'user.username',					array('function1' => 'vb_set_encoding_from_source', 'function2' => 'utf8_clean_string')),
 				array('user_password',			'user.password',					'vb_convert_password_hash'),
 				array('user_passwd_salt',		'user.salt',						''),
 				array('user_posts',				'user.posts',						'intval'),
@@ -1278,7 +1277,7 @@ if (!$get_info)
 				array('user_lang',				'language.languagecode',			'vb_get_default_lang'),
 				// vb3 used the same timezone format as phpBB2
 				array('user_timezone',			'user.timezoneoffset',				'vb_convert_timezone'),
-				array('user_dateformat',		$config['default_dateformat'],		array('function1' => 'vb_set_encoding', 'function2' => 'fill_dateformat')),
+				array('user_dateformat',		$config['default_dateformat'],		array('function1' => 'vb_set_encoding_from_source', 'function2' => 'fill_dateformat')),
 				array('user_inactive_reason',	INACTIVE_REGISTER,					''),
 				array('user_inactive_time',		'user.joindate',					''),
 
@@ -1328,6 +1327,8 @@ if (!$get_info)
 				'query_first'	=> array(
 					array('target', $convert->truncate_statement . LOG_TABLE),
 				),
+				// You need this to retreive the character encoding used to store strings on this table
+				'execute_first'	=> '$convert->convertor["current_table_name"] = "moderatorlog";',
 
 				array('log_type',				'',								'vb_log_type'),
 				array('user_id',				'moderatorlog.userid',			'vb_user_id'),
@@ -1346,11 +1347,12 @@ if (!$get_info)
 			),
 
 			array(
-				'target'		=> (defined('CONVERT_ALBUMS') && (CONVERT_ALBUMS == 1)) ? $table_prefix . 'gallery_albums' : '',
+				'target'		=> (vb_is_convert_albums()) ? $table_prefix . 'gallery_albums' : '',
 				'primary'		=> 'album.albumid',
 				'execute_first'	=>
-								'vb_create_gallery_tables();'
-							. ' vb_create_gallery_file_system();',
+								'vb_create_gallery_tables();
+								vb_create_gallery_file_system();
+								$convert->convertor["current_table_name"] = "album";',
 				'query_first'	=> array('target', $convert->truncate_statement . $table_prefix . 'gallery_albums'),
 
 				array('album_id',					'album.albumid',			''),
@@ -1361,7 +1363,7 @@ if (!$get_info)
 				array('album_type',					1,							''),
 				array('album_status',				0,							''),
 				array('album_contest',				0,							''),
-				array('album_name',					'album.title',				'vb_set_default_encoding'),
+				array('album_name',					'album.title',				'vb_set_encoding_from_source'),
 				array('album_desc_uid',				'album.createdate',			'make_uid'),
 				array('album_desc',					'album.description',		'vb_prepare_message'),
 				array('album_desc_options',			7,							''),
@@ -1385,13 +1387,16 @@ if (!$get_info)
 				array('album_feed',					1,							''),
 				array('album_auth_access',			'album.state',				'vb_album_auth_access'),
 
-				'where'		=> 'album.userid IN (SELECT userid FROM user)',
+				// The conversion framework doesn't allow 'INNER JOIN'
+				'where'		=> 'album.userid=user.userid',
 			),
 
 			array(
-				'target'		=> (defined('CONVERT_ALBUMS') && (CONVERT_ALBUMS == 1)) ? $table_prefix . 'gallery_images' : '',
+				'target'		=> (vb_is_convert_albums()) ? $table_prefix . 'gallery_images' : '',
 				'primary'		=> 'albumpicture.pictureid',
 				'query_first'	=> array('target', $convert->truncate_statement . $table_prefix . 'gallery_images'),
+				// You need this to retreive the character encoding used to store strings on this table
+				'execute_first'	=> '$convert->convertor["current_table_name"] = "albumpicture";',
 
 				array('image_id',				'albumpicture.pictureid',				''),
 				array('',						'picture.extension',					''),
@@ -1429,18 +1434,21 @@ if (!$get_info)
 				'left_join'		=> array(
 					'albumpicture LEFT JOIN picture ON albumpicture.pictureid=picture.pictureid',
 				),
-				'where'		=> 'picture.userid IN (SELECT userid FROM user)',
+				// The conversion framework doesn't allow 'INNER JOIN'
+				'where'		=> 'picture.userid=user.userid',
 			),
 
 			array(
-				'target'		=> (defined('CONVERT_ALBUMS') && (CONVERT_ALBUMS == 1)) ? $table_prefix . 'gallery_comments' : '',
+				'target'		=> (vb_is_convert_albums()) ? $table_prefix . 'gallery_comments' : '',
 				'primary'		=> 'picturecomment.commentid',
 				'query_first'	=> array('target', $convert->truncate_statement . $table_prefix . 'gallery_comments'),
+				// You need this to retreive the character encoding used to store strings on this table
+				'execute_first'	=> '$convert->convertor["current_table_name"] = "picturecomment";',
 
 				array('comment_id',				'picturecomment.commentid',			''),
 				array('comment_image_id',		'picturecomment.pictureid',			''),
 				array('comment_user_id',		'picturecomment.postuserid',		'vb_user_id'),
-				array('comment_username',		'picturecomment.postusername',		'vb_set_default_encoding'),
+				array('comment_username',		'picturecomment.postusername',		'vb_set_encoding_from_source'),
 				array('comment_user_colour',	'',									''),
 				array('comment_user_ip',		'picturecomment.ipaddress',			'long2ip'),
 				array('comment_signature',		0,									''),
@@ -1452,7 +1460,7 @@ if (!$get_info)
 				array('comment_edit_count',		0,									''),
 				array('comment_edit_user_id',	0,									''),
 
-				'where'			=> "picturecomment.state='visible' AND picturecomment.postuserid IN (SELECT userid FROM user) AND picturecomment.pictureid IN (SELECT pictureid FROM picture)",
+				'where'			=> "picturecomment.state='visible' AND picturecomment.postuserid=user.userid AND picturecomment.pictureid=picture.pictureid",
 			),
 		),
 	);

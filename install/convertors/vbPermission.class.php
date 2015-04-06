@@ -361,8 +361,11 @@ class vbPermission
 	 */
 	function removeValueFromArray(&$array, $value)
 	{
-		if(($key = array_search($value, $array)) !== false) {
-			unset($array[$key]);
+		if (!empty($array))
+		{
+			if(($key = array_search($value, $array)) !== false) {
+				unset($array[$key]);
+			}
 		}
 	}
 
@@ -378,9 +381,15 @@ class vbPermission
 		$permissions = $this->permissions;
 		foreach ($permissions['rights_remove'] as $type => $rights)
 		{
-			foreach($rights as $right)
+			if (!empty($rights))
 			{
-				$this->removeValueFromArray($permissions['rights_add'][$type], $right);
+				foreach($rights as $right)
+				{
+					if (!empty($right) && isset($permissions['rights_add'][$type]))
+					{
+						$this->removeValueFromArray($permissions['rights_add'][$type], $right);
+					}
+				}
 			}
 		}
 		unset($permissions['rights_remove']);
@@ -395,7 +404,7 @@ class vbPermission
 		// Empty arrays that doesn't have the "type" included in the list of rights
 		foreach ($permissions['rights_add'] as $type => $rights)
 		{
-			if (!in_array($type, $rights))
+			if (empty($rights) || !in_array($type, $rights))
 			{
 				unset($new_permissions['rights_add'][$type]);
 			}
