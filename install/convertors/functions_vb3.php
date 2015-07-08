@@ -3623,8 +3623,8 @@ function vb_convert_infractions()
 				'log_id' => $max_log_id,
 				'log_type' => LOG_MOD,
 				'user_id' => vb_user_id($infraction['whoadded']),
-				'forum_id' => $infraction['forumid'] ? infraction['forumid'] : 0,
-				'topic_id' => $infraction['threadid'] ? $infraction['threadid'] : 0,
+				'forum_id' => ($infraction['forumid'] ? $infraction['forumid'] : 0),
+				'topic_id' => ($infraction['threadid'] ? $infraction['threadid'] : 0),
 				'reportee_id' => 0,
 				'log_ip' => '',
 				'log_time' => $infraction['dateline'],
@@ -3640,7 +3640,7 @@ function vb_convert_infractions()
 			$warning = array(
 				'warning_id' => $infraction['infractionid'],
 				'user_id' => vb_user_id($infraction['userid']),
-				'post_id' => $infraction['postid'] ? $infraction['postid'] : 0,
+				'post_id' => ($infraction['postid'] ? $infraction['postid'] : 0),
 				'log_id' => $max_log_id -1,
 				'warning_time' => $infraction['dateline'],
 			);
