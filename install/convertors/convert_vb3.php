@@ -33,7 +33,7 @@ $dbms = $phpbb_config_php_file->convert_30_dbms_to_31($dbms);
 */
 $convertor_data = array(
 	'forum_name'	=> 'vBulletin versions 3.5, 3.7 & 3.8 (3.6 has not been tested)',
-	'version'		=> '1.0.0.15.7.9',
+	'version'		=> '1.0.0.15.7.10',
 	'phpbb_version'	=> '3.1.2',
 	'author'		=> '<a href="https://www.phpbb.com/community/memberlist.php?mode=viewprofile&u=1438256">FredQ</a>',
 	'dbms'			=> $dbms,

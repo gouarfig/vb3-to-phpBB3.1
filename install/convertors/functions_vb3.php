@@ -3969,7 +3969,7 @@ function vb_convert_attachment_bbcode()
 	$attachments = array();
 	$orphans = array();
 
-	$sql = "SELECT attach_id, in_message, is_orphan, post_id, post_attachment, post_text, bbcode_bitfield, bbcode_uid, real_filename FROM " . ATTACHMENTS_TABLE . " a "
+	$sql = "SELECT attach_id, is_orphan, post_id, post_attachment, post_text, bbcode_bitfield, bbcode_uid, real_filename FROM " . ATTACHMENTS_TABLE . " a "
 			. "LEFT JOIN " . POSTS_TABLE . " p ON a.post_msg_id = p.post_id ORDER BY post_id ASC,attach_id DESC";
 	$result = $db->sql_query($sql);
 	while ($row = $db->sql_fetchrow($result)) {
@@ -4047,7 +4047,8 @@ function vb_convert_attachment_bbcode()
 			//echo "After after: <br />\n{$message_parser->message}<br />\n";
 			$updates[$post_id] = array(
 				'post_text' => $message_parser->message,
-				'bbcode_bitfield' => $message_parser->bbcode_bitfield
+				'bbcode_bitfield' => $message_parser->bbcode_bitfield,
+				'post_attachment' => 1,
 			);
 			unset($message);
 		}
