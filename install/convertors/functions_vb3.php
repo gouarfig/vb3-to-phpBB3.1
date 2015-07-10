@@ -3962,6 +3962,109 @@ function vb_fix_image_comments()
 	}
 }
 
+function vb_convert_attachment_bbcode()
+{
+	global $db, $message_parser, $convert, $user;
+
+	$attachments = array();
+	$orphans = array();
+
+	$sql = "SELECT attach_id, in_message, is_orphan, post_id, post_attachment, post_text, bbcode_bitfield, bbcode_uid, real_filename FROM " . ATTACHMENTS_TABLE . " a "
+			. "LEFT JOIN " . POSTS_TABLE . " p ON a.post_msg_id = p.post_id ORDER BY post_id ASC,attach_id DESC";
+	$result = $db->sql_query($sql);
+	while ($row = $db->sql_fetchrow($result)) {
+		if ($row['post_id'] > 0) {
+			if (!isset($attachments[$row['post_id']])) {
+				$attachments[$row['post_id']] = array(
+					'post_id' => $row['post_id'],
+					'post_attachment' => $row['post_attachment'],
+					'post_text' => $row['post_text'],
+					'bbcode_uid' => $row['bbcode_uid'],
+					'bbcode_bitfield' => $row['bbcode_bitfield'],
+					'attachments' => array(),
+				);
+			}
+			$attachments[$row['post_id']]['attachments'][] = array(
+				'attach_id' => $row['attach_id'],
+				'real_filename' => $row['real_filename'],
+			);
+		} elseif (!$row['is_orphan']) {
+			$orphans[] = $row['attach_id'];
+		}
+	}
+	$db->sql_freeresult($result);
+
+	if (count($orphans) > 0) {
+		vb_conversion_log("vb_convert_attachment_bbcode(): Found " . count($orphans) . " orphan attachment(s).");
+		$sql = "UPDATE " . ATTACHMENTS_TABLE . " SET is_orphan=1 WHERE attach_id IN (" . implode(',', $orphans) . ")";
+		$result = $db->sql_query($sql);
+	} else {
+		vb_conversion_log("vb_convert_attachment_bbcode(): No orphan attachment found. Good.");
+	}
+
+	$updates = array();
+	foreach ($attachments as $post_id => $post) {
+		if (preg_match("/\[attachment=/i", $post['post_text']) == 1)
+		{
+			$message_parser->warn_msg = array(); // Reset the errors from the previous message
+			$message_parser->bbcode_uid = $post['bbcode_uid'];
+			$message_parser->message = $post['post_text'];
+			$message_parser->message_status = '';
+			$message_parser->decode_message();
+
+			$message = $message_parser->message;
+
+			vb_conversion_log("vb_convert_attachment_bbcode(): Post ID {$post_id} contains " . count($post['attachments']) . " inline attachment(s).");
+			//echo "Before: <br />\n{$message}<br />\n";
+
+			$i = 0;
+			foreach ($post['attachments'] as $attachment) {
+				// And without after
+				$message = preg_replace(
+						"/\[attachment=\]{$attachment['attach_id']}\[\/attachment\]/i",
+						"[attachment={$i}]{$attachment['real_filename']}[/attachment]",
+						$message);
+				//echo "Post ID {$post_id}: {$attachment['attach_id']} => {$i} ({$attachment['real_filename']})<br />\n";
+				$i++;
+			}
+			//echo "After: <br />\n{$message}<br />\n";
+
+			$message_parser->warn_msg = array(); // Reset the errors from the previous message
+			$message_parser->message = $message;
+			$message_parser->message_status = '';
+			// Tell the parser not to complain if a message is too big
+			$config['max_post_chars'] = 0;
+
+			$message_parser->parse(true, true, true);
+
+			if (sizeof($message_parser->warn_msg))
+			{
+				$convert->p_master->error('<span style="color:red">' . $user->lang['POST_ID'] . ': ' . $post_id . ' ' . $user->lang['CONV_ERROR_MESSAGE_PARSER'] . ': <br /><br />' . implode('<br />', $message_parser->warn_msg), __LINE__, __FILE__, true);
+			}
+
+			$convert->row['mp_bbcode_bitfield'] = $convert_row['mp_bbcode_bitfield'] = $message_parser->bbcode_bitfield;
+
+			//echo "After after: <br />\n{$message_parser->message}<br />\n";
+			$updates[$post_id] = array(
+				'post_text' => $message_parser->message,
+				'bbcode_bitfield' => $message_parser->bbcode_bitfield
+			);
+			unset($message);
+		}
+	}
+	//throw new Exception;
+	if (!empty($updates))
+	{
+		foreach ($updates as $post_id => $record)
+		{
+			$sql = 'UPDATE ' . POSTS_TABLE . '
+				SET ' . $db->sql_build_array('UPDATE', $record) . "
+				WHERE post_id = $post_id";
+			$db->sql_query($sql);
+		}
+	}
+}
+
 /**
  * Returns vBulletin version as a number
  *

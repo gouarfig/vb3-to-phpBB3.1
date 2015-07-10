@@ -33,7 +33,7 @@ $dbms = $phpbb_config_php_file->convert_30_dbms_to_31($dbms);
 */
 $convertor_data = array(
 	'forum_name'	=> 'vBulletin versions 3.5, 3.7 & 3.8 (3.6 has not been tested)',
-	'version'		=> '1.0.0.15.7.8',
+	'version'		=> '1.0.0.15.7.9',
 	'phpbb_version'	=> '3.1.2',
 	'author'		=> '<a href="https://www.phpbb.com/community/memberlist.php?mode=viewprofile&u=1438256">FredQ</a>',
 	'dbms'			=> $dbms,
@@ -45,6 +45,8 @@ $convertor_data = array(
 	'table_prefix'	=> 'vb_',
 	'forum_path'	=> '../forums',
 	'author_notes'	=> ""
+	. "<strong>It is highly recommended to disable your vBulletin board during the conversion. If you can't disable it, please disable user registration.</strong><br />\n"
+	. "If a new user registers during the conversion, it is assured that the conversion will fail.<br /><br />\n"
 	. "<strong>Please read this note if your board is or has a default language different than English:</strong><br />\n"
 	. "<ul><li>It is advisable to install your languages in phpBB <strong>before</strong> starting the conversion</li><br />\n"
 	. "<li>If you want the default user groups to be mapped to the default phpBB user groups, you need to change the names of the groups in the file <i>convert_vb3_config.php</i><br />\n"
@@ -535,6 +537,7 @@ if (!$get_info)
 			'CODE' => 'code',
 			'HTML' => 'html',
 			'SIGPIC' => 'sigpic',
+			'ATTACH' => 'attachment=',
 		),
 
 		// Moderator log conversion
@@ -863,6 +866,8 @@ if (!$get_info)
 		', '
 			vb_import_polloption();
 		', '
+			vb_convert_attachment_bbcode();
+		', '
 			vb_set_board_startdate();
 		', '
 			update_folder_pm_count();
@@ -956,7 +961,7 @@ if (!$get_info)
 				array('topic_id',				'thread.threadid',					''),
 				array('forum_id',				'thread.forumid',					''),
 				array('icon_id',				'thread.iconid',					'vb_icon_id'),
-				array('topic_attachment',		'thread.attach',					''),
+				array('topic_attachment',		'thread.attach',					'is_positive'),
 				array('topic_title',			'thread.title',						'vb_set_encoding_from_source'),
 				array('topic_poster',			'thread.postuserid AS poster_id',	'vb_user_id'),
 				array('topic_time',				'thread.dateline',					''),
@@ -1057,7 +1062,7 @@ if (!$get_info)
 				array('enable_magic_url',		1,									''),
 				array('post_username',			'post.username',					'vb_set_encoding_from_source'),
 				array('post_subject',			'post.title',						'vb_set_encoding_from_source'),
-				array('post_attachment',		'post.attach',						''),
+				array('post_attachment',		'post.attach',						'is_positive'),
 
 				array('post_edit_time',			'editlog.dateline AS e_dateline',	array('typecast' => 'int')),
 				array('post_edit_count',		'editlog.postid AS e_postid',		'is_positive'),
