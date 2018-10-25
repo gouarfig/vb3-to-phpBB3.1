@@ -860,7 +860,7 @@ function vb_add_bbcodes()
 				'second_pass_replace'		=> '<span style="margin-left: 20px">${1}</span>'
 			),
 	);
-	if (vb_version() >= 370)
+	if (vb_version() >= 360)
 	{
 		$new_bbcodes['sigpic'] = array(
 				'bbcode_tag' 				=> 'sigpic',
@@ -1294,7 +1294,7 @@ function add_user_sigpic_fields()
 {
 	global $db, $phpbb_container;
 
-	if (vb_version() >= 370)
+	if (vb_version() >= 360)
 	{
 		$columns = array(
 			'user_sigpic' => array('VCHAR', ''),
@@ -2033,7 +2033,7 @@ function vb_import_signaturepic()
 {
 	global $db, $src_db, $convert, $config;
 
-	if (vb_version() >= 370)
+	if (vb_version() >= 360)
 	{
 		$destination_path = vb_get_signaturepic_path();
 
@@ -2534,7 +2534,7 @@ function vb_convert_profile_custom_fields()
 	vb_conversion_log("vb_convert_profile_custom_fields(): " . count($languages) . " languages loaded from phpBB.");
 
 	$src_db = get_src_db_object();
-	if (vb_version() >= 370)
+	if (vb_version() >= 360)
 	{
 		$sql = "SELECT profilefieldid,required,hidden,maxlength,size,displayorder,editable,type,data,height,def,optional,searchable,memberlist,regex,form,html"
 				. " FROM {$convert->src_table_prefix}profilefield ORDER BY displayorder";
@@ -2571,7 +2571,7 @@ function vb_convert_profile_custom_fields()
 
 	$src_db = get_src_db_object();
 	$definition = array();
-	if (vb_version() >= 370)
+	if (vb_version() >= 360)
 	{
 		$sql = "SELECT languageid,phrasegroup_cprofilefield FROM {$convert->src_table_prefix}language WHERE languagecode='{$languagecode}'";
 		$result = $src_db->sql_query($sql);
@@ -3554,7 +3554,7 @@ function vb_convert_infractions()
 {
 	global $convert;
 
-	if (vb_version() >= 370)
+	if (vb_version() >= 360)
 	{
 		$src_db = get_src_db_object();
 		$infractions = array();
